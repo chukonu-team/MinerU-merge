@@ -30,8 +30,8 @@
         }
     },
     "models-dir": {
-        "pipeline": "/opt/modelscope/hub/models/OpenDataLab/PDF-Extract-Kit-1___0",
-        "vlm": "/opt/modelscope/hub/models/OpenDataLab/MinerU2___5-2509-1___2B"
+        "pipeline": "/opt/modelscope/hub/OpenDataLab/PDF-Extract-Kit-1___0",
+        "vlm": "/opt/modelscope/hub/OpenDataLab/MinerU2___5-2509-1___2B"
     },
     "config_version": "1.3.0"
 }

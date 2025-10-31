@@ -36,10 +36,10 @@ RUN pip install --no-cache-dir flash_attn && \
     pip install --no-cache-dir onnxruntime-gpu==1.22.0
 
 # Download all models in a single layer
-RUN /bin/bash -c "export MINERU_MODEL_SOURCE=huggingface && \
+RUN /bin/bash -c "export MINERU_MODEL_SOURCE=modelscope && \
     export MODELSCOPE_CACHE=/opt/modelscope/hub && \
     export HUGGINGFACE_HUB_CACHE=/opt/modelscope/hub && \
-    python3 -m mineru.cli.models_download -s huggingface -m all"
+    python3 -m mineru.cli.models_download -s modelscope -m all"
 
 # Set the entry point to activate the virtual environment and run the command line tool
 ENTRYPOINT ["/bin/bash", "-c", "export MINERU_MODEL_SOURCE=local && exec \"$@\"", "--"]
