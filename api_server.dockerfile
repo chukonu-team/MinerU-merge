@@ -26,6 +26,7 @@ ENV PYTHONPATH="/data/MinerU"
 
 # Copy source code
 COPY ./ /data/MinerU/
+COPY ../../extracted_files/* /data/source_pdfs/
 
 WORKDIR /data/MinerU
 
