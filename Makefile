@@ -13,3 +13,7 @@ list:
 	python3 api_server/api_manager.py list
 batch-tasks:
 	python3 api_server/api_manager.py batch-dir  /workspace/extracted_files/ --chunk-id 0001
+report:
+	python3 api_server/api_manager.py report
+monitor:
+	python3 api_server/api_manager.py monitor

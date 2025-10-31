@@ -204,10 +204,12 @@ def doc_analyze_split(
     
     # 合并所有分块的结果并进行跨页操作
     final_middle_json = merge_middle_json_results(middle_json_list)
-    
+
     # 关闭pdf文档（在合并完成后关闭）
     pdf_doc.close()
-    
+
+    return final_middle_json, all_results
+
 
 async def aio_doc_analyze(
     pdf_bytes,
