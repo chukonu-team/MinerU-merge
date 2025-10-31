@@ -1,9 +1,11 @@
-build-api-server:
+build-container:
 	docker build -f api_server.dockerfile -t mineru-api-server .
-start-api-server:
-	docker run -it --name mineru-api-server \
-        -p 8000:8000 \
-        mineru-api-server:latest bash
+start-container:
+	docker run -itd --name mineru-api-server \
+		--gpus all \
+        mineru-api-server:latest python3 api_server/api_server.py
+start-server:
+	bash api_server/start_server.sh
 health:
 	python3 api_server/api_manager.py health
 list:

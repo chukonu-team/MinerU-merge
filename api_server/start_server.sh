@@ -24,7 +24,7 @@ export OPENBLAS_NUM_THREADS="3"
 export MM_PROCESSOR_CACHE_GB="0"
 export API_HOST="0.0.0.0"
 export API_PORT="8001"
-export MINERU_TOOLS_CONFIG_JSON="/data/MinerU/mineru.json"
+export MINERU_TOOLS_CONFIG_JSON="/data/MinerU/api_server/mineru.json"
 
 # 创建必要目录
 mkdir -p "$INPUT_DIR"
