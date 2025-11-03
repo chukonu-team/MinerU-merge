@@ -386,6 +386,7 @@ class MinerUAPIServer:
                     "task_id": task.task_id,
                     "status": task.status,
                     "pdf_name": task.pdf_name or "未知文件",
+                    "chunk_id": task.chunk_id or "无分组",
                     "created_at": task.created_at.isoformat(),
                     "updated_at": task.updated_at.isoformat()
                 })
