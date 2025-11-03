@@ -27,4 +27,4 @@ report_chunk:
 detailed-report:
 	python3 api_server/api_manager.py detailed-report --chunk-id 0001 --output-dir reports/
 show-table:
-  	python3 api_server/api_manager.py detailed-report --chunk-id 0001 --html --show-table --output-dir reports/
+	python3 api_server/api_manager.py detailed-report --chunk-id 0001 --html --show-table --output-dir reports/
