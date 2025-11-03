@@ -112,6 +112,7 @@ class TaskStatus(BaseModel):
     status: str  # "pending", "processing", "completed", "failed"
     created_at: datetime
     updated_at: datetime
+    processing_at: Optional[datetime] = None  # 任务开始处理的时间
     message: Optional[str] = None
     result_path: Optional[str] = None
     error: Optional[str] = None
@@ -445,6 +446,7 @@ class MinerUAPIServer:
             # 更新任务状态
             self.tasks[task_id].status = "processing"
             self.tasks[task_id].updated_at = datetime.now()
+            self.tasks[task_id].processing_at = datetime.now()  # 记录开始处理的时间
             self.tasks[task_id].message = "正在处理中..."
 
             # 创建输出目录
@@ -533,13 +535,15 @@ class MinerUAPIServer:
 
                 break
 
-            # 检查任务是否超时（比如30分钟）
-            if datetime.now() - self.tasks[task_id].created_at > timedelta(minutes=30):
-                self.tasks[task_id].status = "failed"
-                self.tasks[task_id].updated_at = datetime.now()
-                self.tasks[task_id].error = "任务超时"
-                self.tasks[task_id].message = "处理超时"
-                break
+            # 检查任务是否超时（比如300分钟）- 只对真正在处理的任务检查超时
+            if self.tasks[task_id].status == "processing":
+                start_time = self.tasks[task_id].processing_at or self.tasks[task_id].created_at
+                if datetime.now() - start_time > timedelta(minutes=300):
+                    self.tasks[task_id].status = "failed"
+                    self.tasks[task_id].updated_at = datetime.now()
+                    self.tasks[task_id].error = "任务超时"
+                    self.tasks[task_id].message = "处理超时"
+                    break
 
 
 # 全局服务器实例
