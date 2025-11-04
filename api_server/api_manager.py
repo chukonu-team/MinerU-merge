@@ -221,9 +221,9 @@ def main():
                     bar = '█' * filled + '░' * (bar_length - filled)
                     print(f"  [{bar}]")
 
-                print("\n" + "=" * 100)
-                print(f"{'任务ID':<40} {'文件名':<30} {'Chunk ID':<20} {'状态':<15}")
-                print("-" * 100)
+                print("\n" + "=" * 140)
+                print(f"{'任务ID':<40} {'文件名':<30} {'Chunk ID':<20} {'状态':<15} {'错误信息/消息'}")
+                print("-" * 140)
 
                 # 显示任务列表
                 if tasks:
@@ -235,6 +235,8 @@ def main():
                         chunk_id = task.get('chunk_id', '') or '-'
                         chunk_id_short = chunk_id[:17] + '...' if len(chunk_id) > 20 else chunk_id
                         status = task.get('status', 'unknown')
+                        error = task.get('error', '')
+                        message = task.get('message', '')
 
                         # 状态颜色标记
                         status_icons = {
@@ -245,7 +247,23 @@ def main():
                         }
                         icon = status_icons.get(status, '❓')
 
-                        print(f"{task_id_short:<40} {pdf_name_short:<30} {chunk_id_short:<20} {icon} {status:<12}")
+                        # 组合错误信息和消息
+                        detail_info = ''
+                        if error:
+                            detail_info = error
+                        elif message:
+                            detail_info = message
+
+                        # 截断详细信息以适应列宽
+                        if len(detail_info) > 50:
+                            detail_info = detail_info[:47] + '...'
+
+                        print(f"{task_id_short:<40} {pdf_name_short:<30} {chunk_id_short:<20} {icon} {status:<12} {detail_info}")
+
+                        # 如果详细信息被截断，额外显示完整信息
+                        full_detail = error or message
+                        if full_detail and len(full_detail) > 50:
+                            print(f"{'  └─ 详情':<40} {'':30} {'':20} {'':15} {full_detail}")
 
                 else:
                     print("(暂无任务)")

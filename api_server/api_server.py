@@ -274,7 +274,9 @@ class MinerUAPIServer:
                     "pdf_name": task.pdf_name or "未知文件",
                     "chunk_id": task.chunk_id or "无分组",
                     "created_at": task.created_at.isoformat(),
-                    "updated_at": task.updated_at.isoformat()
+                    "updated_at": task.updated_at.isoformat(),
+                    "error": getattr(task, 'error', ''),
+                    "message": getattr(task, 'message', '')
                 })
 
             return {
@@ -389,7 +391,9 @@ class MinerUAPIServer:
                     "pdf_name": task.pdf_name or "未知文件",
                     "chunk_id": task.chunk_id or "无分组",
                     "created_at": task.created_at.isoformat(),
-                    "updated_at": task.updated_at.isoformat()
+                    "updated_at": task.updated_at.isoformat(),
+                    "error": getattr(task, 'error', ''),
+                    "message": getattr(task, 'message', '')
                 })
 
             return {
@@ -534,16 +538,6 @@ class MinerUAPIServer:
                         self.tasks[task_id].message = "进程池执行失败"
 
                 break
-
-            # 检查任务是否超时（比如300分钟）- 只对真正在处理的任务检查超时
-            if self.tasks[task_id].status == "processing":
-                start_time = self.tasks[task_id].processing_at or self.tasks[task_id].created_at
-                if datetime.now() - start_time > timedelta(minutes=300):
-                    self.tasks[task_id].status = "failed"
-                    self.tasks[task_id].updated_at = datetime.now()
-                    self.tasks[task_id].error = "任务超时"
-                    self.tasks[task_id].message = "处理超时"
-                    break
 
 
 # 全局服务器实例
