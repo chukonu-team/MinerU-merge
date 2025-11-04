@@ -29,6 +29,7 @@ export MINERU_TOOLS_CONFIG_JSON="/data/MinerU/api_server/mineru.json"
 # 创建必要目录
 mkdir -p "$INPUT_DIR"
 mkdir -p "$OUTPUT_DIR"
+mkdir -p logs/
 
 echo "启动 MinerU API 服务器..."
 cd "$(dirname "$0")"
