@@ -233,6 +233,11 @@ def main():
                 completed = len([t for t in tasks if t.get('status') == 'completed'])
                 failed = len([t for t in tasks if t.get('status') == 'failed'])
 
+                # 计算页数汇总
+                total_pages = sum(t.get('page_count', 0) for t in tasks if t.get('page_count') is not None)
+                completed_pages = sum(t.get('page_count', 0) for t in tasks if t.get('status') == 'completed' and t.get('page_count') is not None)
+                processing_pages = sum(t.get('page_count', 0) for t in tasks if t.get('status') == 'processing' and t.get('page_count') is not None)
+
                 # 显示统计信息
                 print(f"\n📊 任务统计 (共 {total} 个)")
                 print(f"  总数:     {total}")
@@ -240,6 +245,19 @@ def main():
                 print(f"  处理中:   {processing}")
                 print(f"  已完成:   {completed}")
                 print(f"  失败:     {failed}")
+
+                # 显示页数汇总信息
+                if total_pages > 0:
+                    # 计算有页数信息的任务数量
+                    tasks_with_pages = len([t for t in tasks if t.get('page_count') is not None])
+                    avg_pages = total_pages / tasks_with_pages if tasks_with_pages > 0 else 0
+
+                    print(f"\n📄 页数统计")
+                    print(f"  已知总页数: {total_pages}")
+                    print(f"  已完成页数: {completed_pages}")
+                    if processing_pages > 0:
+                        print(f"  处理中页数: {processing_pages}")
+                    print(f"  平均每PDF: {avg_pages:.1f} 页")
 
                 # 计算进度
                 if total > 0:
@@ -251,6 +269,16 @@ def main():
                     filled = int(bar_length * progress / 100)
                     bar = '█' * filled + '░' * (bar_length - filled)
                     print(f"  [{bar}]")
+
+                    # 如果有页数信息，也显示页数完成进度
+                    if total_pages > 0:
+                        page_progress = completed_pages / total_pages * 100
+                        print(f"\n📖 页数完成进度: {page_progress:.1f}%")
+                        page_bar_length = 50
+                        page_filled = int(page_bar_length * page_progress / 100)
+                        page_bar = '█' * page_filled + '░' * (page_bar_length - page_filled)
+                        print(f"  [{page_bar}]")
+                        print(f"  已完成页数: {completed_pages} (已知总数: {total_pages})")
 
                 print("\n" + "=" * 155)
                 print(f"{'任务ID':<40} {'文件名':<25} {'Chunk ID':<18} {'状态':<12} {'页数':<8} {'错误信息/消息'}")
