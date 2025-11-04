@@ -33,6 +33,7 @@ WORKDIR /data/MinerU
 RUN pip install --no-cache-dir flash_attn && \
     pip install --no-cache-dir -e .[all] && \
     pip uninstall -y onnxruntime && \
+    pip install PyMuPDF && \
     pip install --no-cache-dir onnxruntime-gpu==1.22.0
 
 # Download all models in a single layer

@@ -252,9 +252,9 @@ def main():
                     bar = '█' * filled + '░' * (bar_length - filled)
                     print(f"  [{bar}]")
 
-                print("\n" + "=" * 140)
-                print(f"{'任务ID':<40} {'文件名':<30} {'Chunk ID':<20} {'状态':<15} {'错误信息/消息'}")
-                print("-" * 140)
+                print("\n" + "=" * 155)
+                print(f"{'任务ID':<40} {'文件名':<25} {'Chunk ID':<18} {'状态':<12} {'页数':<8} {'错误信息/消息'}")
+                print("-" * 155)
 
                 # 显示任务列表
                 if tasks:
@@ -262,10 +262,12 @@ def main():
                         task_id = task.get('task_id', '')
                         task_id_short = task_id[:37] + '...' if len(task_id) > 40 else task_id
                         pdf_name = task.get('pdf_name', '未知文件')
-                        pdf_name_short = pdf_name[:27] + '...' if len(pdf_name) > 30 else pdf_name
+                        pdf_name_short = pdf_name[:22] + '...' if len(pdf_name) > 25 else pdf_name
                         chunk_id = task.get('chunk_id', '') or '-'
-                        chunk_id_short = chunk_id[:17] + '...' if len(chunk_id) > 20 else chunk_id
+                        chunk_id_short = chunk_id[:15] + '...' if len(chunk_id) > 18 else chunk_id
                         status = task.get('status', 'unknown')
+                        page_count = task.get('page_count')
+                        page_str = str(page_count) if page_count is not None else '-'
                         error = task.get('error', '')
                         message = task.get('message', '')
 
@@ -285,16 +287,16 @@ def main():
                         elif message:
                             detail_info = message
 
-                        # 截断详细信息以适应列宽
-                        if len(detail_info) > 50:
-                            detail_info = detail_info[:47] + '...'
+                        # 截断详细信息以适应列宽（减少了页数列的空间）
+                        if len(detail_info) > 35:
+                            detail_info = detail_info[:32] + '...'
 
-                        print(f"{task_id_short:<40} {pdf_name_short:<30} {chunk_id_short:<20} {icon} {status:<12} {detail_info}")
+                        print(f"{task_id_short:<40} {pdf_name_short:<25} {chunk_id_short:<18} {icon} {status:<10} {page_str:<8} {detail_info}")
 
                         # 如果详细信息被截断，额外显示完整信息
                         full_detail = error or message
-                        if full_detail and len(full_detail) > 50:
-                            print(f"{'  └─ 详情':<40} {'':30} {'':20} {'':15} {full_detail}")
+                        if full_detail and len(full_detail) > 35:
+                            print(f"{'  └─ 详情':<40} {'':25} {'':18} {'':10} {'':8} {full_detail}")
 
                 else:
                     print("(暂无任务)")

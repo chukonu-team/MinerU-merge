@@ -117,6 +117,7 @@ class TaskStatus(BaseModel):
     result_path: Optional[str] = None
     error: Optional[str] = None
     progress: Optional[Dict[str, Any]] = None
+    page_count: Optional[int] = None  # PDF页数
 
 
 class TaskSubmitResponse(BaseModel):
@@ -296,7 +297,8 @@ class MinerUAPIServer:
                     "created_at": task.created_at.isoformat(),
                     "updated_at": task.updated_at.isoformat(),
                     "error": getattr(task, 'error', ''),
-                    "message": getattr(task, 'message', '')
+                    "message": getattr(task, 'message', ''),
+                    "page_count": getattr(task, 'page_count', None)
                 })
 
             return {
@@ -413,7 +415,8 @@ class MinerUAPIServer:
                     "created_at": task.created_at.isoformat(),
                     "updated_at": task.updated_at.isoformat(),
                     "error": getattr(task, 'error', ''),
-                    "message": getattr(task, 'message', '')
+                    "message": getattr(task, 'message', ''),
+                    "page_count": getattr(task, 'page_count', None)
                 })
 
             return {
@@ -690,6 +693,10 @@ class MinerUAPIServer:
                                 self.tasks[task_id].message = data.get("message", "处理完成")
                                 self.tasks[task_id].result_path = zip_path
                                 self.tasks[task_id].progress = data.get("result", {})
+                                # 提取页数信息
+                                result_data = data.get("result", {})
+                                if result_data and "page_count" in result_data:
+                                    self.tasks[task_id].page_count = result_data["page_count"]
                             else:
                                 self.tasks[task_id].status = "failed"
                                 self.tasks[task_id].updated_at = datetime.now()
@@ -703,6 +710,10 @@ class MinerUAPIServer:
                             self.tasks[task_id].error = data.get("message", "文件被跳过")
                             self.tasks[task_id].message = "文件被跳过"
                             self.tasks[task_id].progress = data.get("result", {})
+                            # 提取页数信息
+                            result_data = data.get("result", {})
+                            if result_data and "page_count" in result_data:
+                                self.tasks[task_id].page_count = result_data["page_count"]
 
                         elif task_status in ["error", "failed"]:
                             # 处理失败
@@ -711,6 +722,10 @@ class MinerUAPIServer:
                             self.tasks[task_id].error = data.get("error", data.get("message", "未知错误"))
                             self.tasks[task_id].message = data.get("message", "处理失败")
                             self.tasks[task_id].progress = data.get("result", {})
+                            # 提取页数信息
+                            result_data = data.get("result", {})
+                            if result_data and "page_count" in result_data:
+                                self.tasks[task_id].page_count = result_data["page_count"]
 
                         else:
                             # 未知状态

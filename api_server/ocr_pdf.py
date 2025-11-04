@@ -20,9 +20,10 @@ def get_pdf_page_count(pdf_path):
         doc = fitz.open(pdf_path)
         page_count = len(doc)
         doc.close()
+        print("len mydebug: page cound====",page_count,pdf_path)
         return page_count
     except Exception as e:
-        # print(f"Error getting page count for {pdf_path}: {e}")
+        print(f"Error getting page count for {pdf_path}: {e}")
         return 0
 
 # --- 移植第一个脚本中的 _process_output 函数 ---
@@ -228,7 +229,7 @@ def process_one_pdf_file(pdf_path, save_dir, lang="en", max_pages_per_pdf=None ,
             return infer_result
 
         temp_root_dir = infer_result.get("temp_dir")
-        mineru_page_count = infer_result.get('page_count', fitz_page_count)
+        mineru_page_count = fitz_page_count
         
         # --- 核心修改：打包临时目录中的所有文件 ---
         if not os.path.exists(temp_root_dir):
