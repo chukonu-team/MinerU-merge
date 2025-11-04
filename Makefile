@@ -16,10 +16,14 @@ list:
 list-by-chunk:
 	python3 api_server/api_manager.py list --chunk-id 0001
 batch-tasks:
-	python3 api_server/api_manager.py batch-dir  /workspace/extracted_files/ --chunk-id 0005
+	python3 api_server/api_manager.py batch-dir  /home/ubuntu/extracted_files --chunk-id 0005
 batch-process:
 	python3 api_server/api_manager.py batch-process  /workspace/extracted_files/ result/ --chunk-id 0006
 task-download:
 	python3 api_server/api_manager.py task-download $(TASK_IDS) $(OUTPUT_DIR)
 chunk-download:
 	python3 api_server/api_manager.py chunk-download $(CHUNK_ID) $(OUTPUT_DIR)
+clean-up:
+	python3 api_server/api_manager.py cleanup --older-than-days 7 --dry-run
+	python3 api_server/api_manager.py cleanup --cleanup-all
+	python3 api_server/api_manager.py cleanup --chunk-id "0005"

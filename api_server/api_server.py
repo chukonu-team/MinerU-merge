@@ -138,6 +138,26 @@ class BatchSubmitResponse(BaseModel):
     successful_submissions: int
 
 
+class CleanupRequest(BaseModel):
+    # 清理策略 - 必须提供其中一种
+    older_than_days: Optional[int] = None  # 清理多少天前的文件
+    task_status: Optional[str] = None     # 按任务状态清理: completed, failed, all
+    chunk_id: Optional[str] = None        # 按chunk_id清理
+    cleanup_all: Optional[bool] = False   # 清理所有历史文件
+
+    # 额外选项
+    dry_run: bool = False                 # 仅预览，不实际删除
+    keep_recent: int = 0                  # 保留最新的N个任务（按状态清理时使用）
+
+
+class CleanupResponse(BaseModel):
+    message: str
+    files_deleted: int
+    space_freed_mb: float
+    tasks_deleted: int
+    details: Dict[str, Any]
+
+
 class MinerUAPIServer:
     def __init__(self,
                  gpu_ids: str = "0",
@@ -443,6 +463,31 @@ class MinerUAPIServer:
                 "completed_tasks": len([t for t in self.tasks.values() if t.status == "completed"])
             }
 
+        @self.app.post("/cleanup", response_model=CleanupResponse)
+        async def cleanup_files(request: CleanupRequest):
+            """清理历史文件和任务数据"""
+            # 验证请求参数
+            if not any([request.older_than_days is not None,
+                       request.task_status is not None,
+                       request.chunk_id is not None,
+                       request.cleanup_all]):
+                raise HTTPException(
+                    status_code=400,
+                    detail="必须提供一种清理策略: older_than_days, task_status, chunk_id 或 cleanup_all"
+                )
+
+            if request.task_status and request.task_status not in ["completed", "failed", "all"]:
+                raise HTTPException(
+                    status_code=400,
+                    detail="task_status 必须是 'completed', 'failed' 或 'all' 之一"
+                )
+
+            try:
+                result = self._perform_cleanup(request)
+                return result
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"清理失败: {str(e)}")
+
     def _submit_ocr_task(self, task_id: str, file_path: str):
         """提交OCR任务到进程池"""
         print(f"[DEBUG] _submit_ocr_task called: task_id={task_id}, file_path={file_path}")
@@ -476,6 +521,149 @@ class MinerUAPIServer:
             self.tasks[task_id].message = "任务提交失败"
 
   
+    def _perform_cleanup(self, request: CleanupRequest) -> CleanupResponse:
+        """执行文件清理操作"""
+        files_deleted = 0
+        space_freed = 0
+        tasks_deleted = 0
+        details = {
+            "temp_files_deleted": 0,
+            "result_files_deleted": 0,
+            "chunk_files_deleted": 0,
+            "tasks_removed": [],
+            "errors": []
+        }
+
+        # 确定要清理的任务列表
+        tasks_to_clean = []
+
+        if request.cleanup_all:
+            # 清理所有任务（除了正在处理的）
+            tasks_to_clean = [task_id for task_id, task in self.tasks.items()
+                             if task.status not in ["pending", "processing"]]
+        elif request.chunk_id:
+            # 按chunk_id清理
+            tasks_to_clean = [task_id for task_id, task in self.tasks.items()
+                             if task.chunk_id == request.chunk_id and
+                             task.status not in ["pending", "processing"]]
+        elif request.older_than_days is not None:
+            # 按时间清理
+            cutoff_date = datetime.now() - timedelta(days=request.older_than_days)
+            tasks_to_clean = [task_id for task_id, task in self.tasks.items()
+                             if task.updated_at < cutoff_date and
+                             task.status not in ["pending", "processing"]]
+        elif request.task_status:
+            # 按状态清理
+            if request.task_status == "all":
+                eligible_tasks = [task_id for task_id, task in self.tasks.items()
+                                 if task.status in ["completed", "failed"]]
+            else:
+                eligible_tasks = [task_id for task_id, task in self.tasks.items()
+                                 if task.status == request.task_status]
+
+            # 按更新时间排序，保留最新的N个
+            eligible_tasks.sort(key=lambda x: self.tasks[x].updated_at, reverse=True)
+
+            if request.keep_recent > 0:
+                tasks_to_clean = eligible_tasks[request.keep_recent:]
+            else:
+                tasks_to_clean = eligible_tasks
+
+        # 如果是预览模式，只返回将要删除的信息
+        if request.dry_run:
+            return CleanupResponse(
+                message=f"预览模式：将清理 {len(tasks_to_clean)} 个任务",
+                files_deleted=0,
+                space_freed_mb=0.0,
+                tasks_deleted=len(tasks_to_clean),
+                details={**details, "tasks_to_clean": tasks_to_clean}
+            )
+
+        # 执行实际清理
+        for task_id in tasks_to_clean:
+            try:
+                task = self.tasks.get(task_id)
+                if not task:
+                    continue
+
+                # 清理临时文件
+                temp_dir = self.output_dir / "temp" / task_id
+                if temp_dir.exists():
+                    temp_size = self._get_directory_size(temp_dir)
+                    if not request.dry_run:
+                        shutil.rmtree(temp_dir)
+                    details["temp_files_deleted"] += 1
+                    space_freed += temp_size
+
+                # 清理结果文件
+                result_dir = self.output_dir / "results" / task_id
+                if result_dir.exists():
+                    result_size = self._get_directory_size(result_dir)
+                    if not request.dry_run:
+                        shutil.rmtree(result_dir)
+                    details["result_files_deleted"] += 1
+                    space_freed += result_size
+
+                # 删除任务记录
+                del self.tasks[task_id]
+                if task_id in self.task_file_mapping:
+                    del self.task_file_mapping[task_id]
+
+                tasks_deleted += 1
+                details["tasks_removed"].append({
+                    "task_id": task_id,
+                    "status": task.status,
+                    "pdf_name": task.pdf_name,
+                    "chunk_id": task.chunk_id
+                })
+
+            except Exception as e:
+                details["errors"].append(f"清理任务 {task_id} 失败: {str(e)}")
+
+        # 清理chunk结果zip文件（如果没有相关任务了）
+        chunk_files_to_remove = []
+        for chunk_file in self.output_dir.glob("chunk_*_results.zip"):
+            chunk_id = chunk_file.name.replace("chunk_", "").replace("_results.zip", "")
+
+            # 检查是否还有该chunk的任务
+            has_chunk_tasks = any(task.chunk_id == chunk_id for task in self.tasks.values())
+
+            if not has_chunk_tasks:
+                chunk_files_to_remove.append(chunk_file)
+
+        for chunk_file in chunk_files_to_remove:
+            try:
+                file_size = chunk_file.stat().st_size
+                if not request.dry_run:
+                    chunk_file.unlink()
+                details["chunk_files_deleted"] += 1
+                space_freed += file_size
+            except Exception as e:
+                details["errors"].append(f"删除chunk文件 {chunk_file} 失败: {str(e)}")
+
+        files_deleted = (details["temp_files_deleted"] +
+                        details["result_files_deleted"] +
+                        details["chunk_files_deleted"])
+
+        return CleanupResponse(
+            message=f"清理完成：删除了 {tasks_deleted} 个任务，释放了 {space_freed / (1024*1024):.2f} MB 空间",
+            files_deleted=files_deleted,
+            space_freed_mb=space_freed / (1024*1024),
+            tasks_deleted=tasks_deleted,
+            details=details
+        )
+
+    def _get_directory_size(self, path: Path) -> int:
+        """获取目录大小（字节）"""
+        total_size = 0
+        try:
+            for file_path in path.rglob("*"):
+                if file_path.is_file():
+                    total_size += file_path.stat().st_size
+        except Exception:
+            pass  # 忽略权限等问题
+        return total_size
+
     async def _monitor_task_completion(self, task_id: str, process_task_id: int):
         """监听任务完成状态"""
         print(f"[DEBUG] _monitor_task_completion started: task_id={task_id}, process_task_id={process_task_id}")

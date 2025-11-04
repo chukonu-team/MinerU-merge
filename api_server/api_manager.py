@@ -112,6 +112,28 @@ class MinerUAPIClient:
         response.raise_for_status()
         return response.json()
 
+    def cleanup_files(self, older_than_days: int = None, task_status: str = None,
+                     chunk_id: str = None, cleanup_all: bool = False,
+                     dry_run: bool = False, keep_recent: int = 0) -> Dict:
+        """清理历史文件"""
+        data = {
+            "dry_run": dry_run,
+            "keep_recent": keep_recent
+        }
+
+        if older_than_days is not None:
+            data["older_than_days"] = older_than_days
+        if task_status is not None:
+            data["task_status"] = task_status
+        if chunk_id is not None:
+            data["chunk_id"] = chunk_id
+        if cleanup_all:
+            data["cleanup_all"] = True
+
+        response = self.session.post(f"{self.base_url}/cleanup", json=data)
+        response.raise_for_status()
+        return response.json()
+
 def download_results(client: MinerUAPIClient, task_ids: List[str], output_dir: str = "downloads") -> Dict:
     """批量下载结果"""
     results = {'success': [], 'failed': []}
@@ -174,6 +196,15 @@ def main():
     chunk_download_parser = subparsers.add_parser('chunk-download', help='下载整个chunk结果到目录')
     chunk_download_parser.add_argument('chunk_id', help='chunk_id标识')
     chunk_download_parser.add_argument('output_dir', help='输出目录路径')
+
+    # 清理历史文件
+    cleanup_parser = subparsers.add_parser('cleanup', help='清理历史文件和任务数据')
+    cleanup_parser.add_argument('--older-than-days', type=int, help='清理多少天前的文件')
+    cleanup_parser.add_argument('--task-status', choices=['completed', 'failed', 'all'], help='按任务状态清理')
+    cleanup_parser.add_argument('--chunk-id', help='按chunk_id清理')
+    cleanup_parser.add_argument('--cleanup-all', action='store_true', help='清理所有历史文件（除正在处理的）')
+    cleanup_parser.add_argument('--dry-run', action='store_true', help='预览模式，不实际删除')
+    cleanup_parser.add_argument('--keep-recent', type=int, default=0, help='保留最新的N个任务（按状态清理时使用）')
 
     args = parser.parse_args()
     client = MinerUAPIClient(args.url)
@@ -499,6 +530,86 @@ def main():
                     print("✗ 下载失败，可能没有完成的任务或chunk_id不存在")
             except Exception as e:
                 print(f"✗ 下载失败: {e}")
+
+        elif args.command == 'cleanup':
+            print("🧹 清理历史文件")
+            print("=" * 80)
+
+            # 显示清理策略
+            if args.cleanup_all:
+                print("📋 清理策略: 清理所有历史文件（除正在处理的）")
+            elif args.chunk_id:
+                print(f"📋 清理策略: 按 chunk_id = {args.chunk_id}")
+            elif args.older_than_days:
+                print(f"📋 清理策略: 清理 {args.older_than_days} 天前的文件")
+            elif args.task_status:
+                print(f"📋 清理策略: 按任务状态 = {args.task_status}")
+                if args.keep_recent > 0:
+                    print(f"📋 保留最新的 {args.keep_recent} 个任务")
+            else:
+                print("✗ 错误: 必须指定一种清理策略")
+                sys.exit(1)
+
+            if args.dry_run:
+                print("⚠️  预览模式: 不会实际删除文件")
+            print("-" * 80)
+
+            try:
+                result = client.cleanup_files(
+                    older_than_days=args.older_than_days,
+                    task_status=args.task_status,
+                    chunk_id=args.chunk_id,
+                    cleanup_all=args.cleanup_all,
+                    dry_run=args.dry_run,
+                    keep_recent=args.keep_recent
+                )
+
+                print(f"✅ {result['message']}")
+                print(f"📁 删除文件数: {result['files_deleted']}")
+                print(f"💾 释放空间: {result['space_freed_mb']:.2f} MB")
+                print(f"🗑️  删除任务数: {result['tasks_deleted']}")
+
+                details = result.get('details', {})
+
+                if details.get('temp_files_deleted', 0) > 0:
+                    print(f"  - 临时文件: {details['temp_files_deleted']}")
+                if details.get('result_files_deleted', 0) > 0:
+                    print(f"  - 结果文件: {details['result_files_deleted']}")
+                if details.get('chunk_files_deleted', 0) > 0:
+                    print(f"  - Chunk文件: {details['chunk_files_deleted']}")
+
+                # 显示被删除的任务（仅显示前5个）
+                tasks_removed = details.get('tasks_removed', [])
+                if tasks_removed:
+                    print(f"\n🗑️  删除的任务（显示前5个）:")
+                    for task in tasks_removed[:5]:
+                        print(f"  - {task['task_id'][:8]}... | {task['pdf_name'][:30]} | {task['status']}")
+
+                    if len(tasks_removed) > 5:
+                        print(f"  ... 还有 {len(tasks_removed) - 5} 个任务")
+
+                # 显示预览模式下的任务列表
+                if args.dry_run and 'tasks_to_clean' in details:
+                    tasks_to_clean = details['tasks_to_clean']
+                    print(f"\n📋 将要清理的任务（显示前5个）:")
+                    for task_id in tasks_to_clean[:5]:
+                        task = client.get_status(task_id)
+                        print(f"  - {task_id[:8]}... | {task.get('pdf_name', '未知')[:30]} | {task.get('status', 'unknown')}")
+
+                    if len(tasks_to_clean) > 5:
+                        print(f"  ... 还有 {len(tasks_to_clean) - 5} 个任务")
+
+                # 显示错误信息
+                errors = details.get('errors', [])
+                if errors:
+                    print(f"\n⚠️  清理过程中的错误:")
+                    for error in errors[:3]:  # 只显示前3个错误
+                        print(f"  - {error}")
+                    if len(errors) > 3:
+                        print(f"  ... 还有 {len(errors) - 3} 个错误")
+
+            except Exception as e:
+                print(f"✗ 清理失败: {e}")
 
     except requests.exceptions.ConnectionError:
         print(f"错误: 无法连接到API服务器 {args.url}")
