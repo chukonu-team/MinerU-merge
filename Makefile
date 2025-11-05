@@ -16,7 +16,7 @@ list:
 list-by-chunk:
 	python3 api_server/api_manager.py list --chunk-id 0001
 batch-tasks:
-	python3 api_server/api_manager.py batch-dir  /home/ubuntu/extracted_files --chunk-id 0005
+	python3 api_server/api_manager.py batch-dir  /home/ubuntu/pdfs --chunk-id 0005
 batch-process:
 	python3 api_server/api_manager.py batch-process  /workspace/extracted_files/ result/ --chunk-id 0006
 task-download:
