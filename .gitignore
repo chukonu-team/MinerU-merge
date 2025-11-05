@@ -51,3 +51,8 @@ _build/
 
 
 output/
+
+logs/
+api_results/
+mineru.egg-info/
+reports/
