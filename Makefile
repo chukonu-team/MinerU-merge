@@ -11,11 +11,12 @@ start-server:
 aaa:
 	docker build -f docker/china/Dockerfile.multi_gpu -t mineru:multi_gpu .
 bbb:
+	docker rm mineru_multi_gpu
 	docker run -d \
-    --name mineru_multi_gpu \
-    --gpus all \
-    -p 8000:8000 \
-    mineru:multi_gpu python3 /app/multi_gpu_v2/server.py --workers-per-device=2
+		--name mineru_multi_gpu \
+		--gpus all \
+		-p 8000:8000 \
+		mineru:multi_gpu
 health:
 	python3 api_server/api_manager.py health
 list:

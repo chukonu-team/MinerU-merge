@@ -75,6 +75,20 @@ def parse_bucket_key(s3_full_path: str):
 def get_device():
     device_mode = os.getenv('MINERU_DEVICE_MODE', None)
     if device_mode is not None:
+        # Handle "auto" special case - convert to actual device
+        if device_mode.lower() == 'auto':
+            if torch.cuda.is_available():
+                return "cuda"
+            elif torch.backends.mps.is_available():
+                return "mps"
+            else:
+                try:
+                    if torch_npu.npu.is_available():
+                        return "npu"
+                except Exception as e:
+                    pass
+            return "cpu"
+        # Return other device modes as-is if they're valid
         return device_mode
     else:
         if torch.cuda.is_available():
