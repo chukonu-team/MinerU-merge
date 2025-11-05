@@ -49,4 +49,5 @@ EXPOSE 8000
 # Default command runs the multi-GPU server
 # You can override with docker run by passing a different command
 # For custom workers_per_device, use: --workers-per-device=N
-CMD ["python3", "/app/multi_gpu_v2/server.py"]
+ENTRYPOINT ["python3"]
+CMD ["/app/multi_gpu_v2/server.py"]
