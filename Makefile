@@ -8,7 +8,8 @@ start-container:
         mineru-api-server:latest bash
 start-server:
 	bash api_server/start_server.sh
-
+aaa:
+	docker build -f docker/china/Dockerfile.multi_gpu -t mineru:multi_gpu .
 health:
 	python3 api_server/api_manager.py health
 list:
