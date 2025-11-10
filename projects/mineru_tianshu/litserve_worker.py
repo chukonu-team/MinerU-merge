@@ -80,7 +80,7 @@ class MinerUWorkerAPI(ls.LitAPI):
         self.worker_id = f"{self.worker_id_prefix}-{hostname}-{device}-{pid}"
         
         logger.info(f"⚙️  Worker {self.worker_id} setting up on device: {device}")
-        
+        os.environ["VLLM_USE_V1"] = "1"
         # 关键修复：设置 CUDA_VISIBLE_DEVICES 限制进程只能看到分配的 GPU
         # 这样可以防止一个进程占用多张卡的显存
         if device != 'auto' and device != 'cpu' and ':' in str(device):
