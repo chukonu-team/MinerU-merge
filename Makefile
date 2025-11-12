@@ -6,7 +6,6 @@ start-api-container:
 	docker run -itd --name mineru-api-server \
 		--gpus all \
 		-p 8001:8001 \
-		-v $(PWD):/workspace \
         mineru-api-server:latest bash
 start-origin-container:
 	docker run -d --name mineru-origin-server --gpus all  -p 8000:8000 \
@@ -30,7 +29,7 @@ list:
 list-by-chunk:
 	python3 api_server/api_manager.py list --chunk-id 0001
 batch-tasks:
-	python3 api_server/api_manager.py batch-dir  /home/ubuntu/pdfs --chunk-id 0005
+	python3 api_server/api_manager.py batch-dir  /home/ubuntu/MinerU/demo/pdfs --chunk-id 0005
 batch-process:
 	python3 api_server/api_manager.py batch-process  /workspace/extracted_files/ result/ --chunk-id 0006
 task-download:
