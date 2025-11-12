@@ -57,7 +57,8 @@ demo-origin-parse:
 		-F "return_middle_json=false" \
 		-F "return_model_output=false" \
 		-F "return_content_list=false" \
-		-F "return_images=false" \
-		-F "response_format_zip=false" \
+		-F "return_images=true" \
+		-F "response_format_zip=true" \
 		-F "start_page_id=0" \
-		-F "end_page_id=99999"
+		-F "end_page_id=99999" \
+		--output results.zip
