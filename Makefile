@@ -1,11 +1,17 @@
-build-container:
+build-api-container:
 	docker build -f api_server.dockerfile -t mineru-api-server .
-start-container:
+build-origin-container:
+	docker build -f docker/china/Dockerfile -t mineru:origin .
+start-api-container:
 	docker run -itd --name mineru-api-server \
 		--gpus all \
 		-p 8001:8001 \
 		-v $(PWD):/workspace \
         mineru-api-server:latest bash
+start-origin-container:
+	docker run -d --name mineru-origin-server --gpus all  -p 8000:8000 \
+        mineru:origin \
+        /bin/bash -c "mineru-api --host 0.0.0.0 --port 8000"
 start-server:
 	bash api_server/start_server.sh
 aaa:
@@ -35,3 +41,23 @@ clean-up:
 	python3 api_server/api_manager.py cleanup --older-than-days 7 --dry-run
 	python3 api_server/api_manager.py cleanup --cleanup-all
 	python3 api_server/api_manager.py cleanup --chunk-id "0005"
+demo-origin-parse:
+	curl -X POST "http://localhost:8000/file_parse" \
+		-H "accept: application/json" \
+		-H "Content-Type: multipart/form-data" \
+		-F "files=@/home/ubuntu/MinerU/demo/pdfs/demo1.pdf" \
+		-F "output_dir=./output" \
+		-F "lang_list=ch" \
+		-F "lang_list=en" \
+		-F "backend=vlm-vllm-async-engine" \
+		-F "parse_method=auto" \
+		-F "formula_enable=true" \
+		-F "table_enable=true" \
+		-F "return_md=true" \
+		-F "return_middle_json=false" \
+		-F "return_model_output=false" \
+		-F "return_content_list=false" \
+		-F "return_images=false" \
+		-F "response_format_zip=false" \
+		-F "start_page_id=0" \
+		-F "end_page_id=99999"
