@@ -51,3 +51,7 @@ _build/
 
 
 output/
+mineru.egg-info/
+batch_test_output/
+output_demo/
+test_output/

@@ -161,6 +161,63 @@ def doc_analyze(
     return middle_json, results
 
 
+def batch_doc_analyze(
+    pdf_bytes_list,
+    image_writer_list,
+    predictor: MinerUClient | None = None,
+    backend="transformers",
+    model_path: str | None = None,
+    server_url: str | None = None,
+    **kwargs,
+):
+    if predictor is None:
+        predictor = ModelSingleton().get_model(backend, model_path, server_url, **kwargs)
+
+    # load_images_start = time.time()
+    all_images_list = []
+    all_pdf_docs = []
+    images_count_per_pdf = []  # 记录每个PDF的图像数量
+
+    # 遍历所有PDF文档，加载图像并拼接
+    for pdf_bytes in pdf_bytes_list:
+        images_list, pdf_doc = load_images_from_pdf(pdf_bytes, image_type=ImageType.PIL)
+        all_images_list.extend(images_list)
+        all_pdf_docs.append(pdf_doc)
+        images_count_per_pdf.append(len(images_list))
+
+    images_pil_list = [image_dict["img_pil"] for image_dict in all_images_list]
+
+    # load_images_time = round(time.time() - load_images_start, 2)
+    # logger.info(f"load images cost: {load_images_time}, speed: {round(len(images_base64_list)/load_images_time, 3)} images/s")
+
+    # infer_start = time.time()
+    results = predictor.batch_two_step_extract(images=images_pil_list)
+    # infer_time = round(time.time() - infer_start, 2)
+    # logger.info(f"infer finished, cost: {infer_time}, speed: {round(len(results)/infer_time, 3)} page/s")
+
+    # 需要为每个PDF文档分别生成middle_json
+    all_middle_json = []
+    image_idx = 0
+
+    for i, pdf_doc in enumerate(all_pdf_docs):
+        # 获取当前PDF的图像数量
+        current_pdf_images_count = images_count_per_pdf[i]
+
+        # 获取当前PDF的图像列表和结果
+        current_images_list = all_images_list[image_idx:image_idx + current_pdf_images_count]
+        current_results = results[image_idx:image_idx + current_pdf_images_count]
+
+        # 为当前PDF生成middle_json
+        image_writer = image_writer_list[i] if i < len(image_writer_list) else None
+        middle_json = result_to_middle_json(current_results, current_images_list, pdf_doc, image_writer)
+        all_middle_json.append(middle_json)
+
+        # 更新图像索引
+        image_idx += current_pdf_images_count
+
+    return all_middle_json, results
+
+
 async def aio_doc_analyze(
     pdf_bytes,
     image_writer: DataWriter | None,
