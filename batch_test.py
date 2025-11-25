@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-MinerU批量测试脚本 - 处理demo目录中的所有PDF文件，包含VLM批量对比测试
+MinerU批量测试脚本 - 对比单独处理和批量处理的性能
+使用doc_analyze进行逐个处理 vs batch_doc_analyze进行批量处理
 """
 import os
 import sys
@@ -11,10 +12,15 @@ from datetime import datetime
 # 添加mineru模块到路径
 sys.path.insert(0, '/home/ubuntu/MinerU')
 
-from demo.demo import parse_doc
-from mineru.backend.vlm.vlm_analyze import doc_analyze, batch_doc_analyze, ModelSingleton
-from mineru.data.data_reader_writer import DataWriter
+from demo.demo import do_parse, _process_output, parse_doc
+from mineru.cli.common import convert_pdf_bytes_to_bytes_by_pypdfium2, prepare_env, read_fn
+from mineru.data.data_reader_writer import FileBasedDataWriter
+from mineru.backend.vlm.vlm_analyze import doc_analyze, batch_doc_analyze
+from mineru.utils.enum_class import MakeMode
+from mineru.utils.guess_suffix_or_lang import guess_suffix_by_path
+from mineru.utils.pdf_image_tools import load_images_from_pdf
 from mineru.utils.enum_class import ImageType
+
 
 def get_pdf_files(demo_dir):
     """获取demo目录中的所有PDF文件"""
@@ -32,208 +38,234 @@ def get_pdf_files(demo_dir):
 
     return sorted(pdf_files)
 
-def process_single_pdf(pdf_path, output_dir, backend, pdf_index, total_pdfs):
-    """处理单个PDF文件"""
-    print(f"\n{'='*60}")
-    print(f"处理PDF {pdf_index+1}/{total_pdfs}: {pdf_path.name}")
+
+def test_single_processing(pdf_files, output_dir, backend="vlm-vllm-engine"):
+    """
+    测试1: 单独处理模式 - 逐个使用doc_analyze处理每个PDF
+    参考demo.py的实现方式
+    """
+    print(f"\n{'='*80}")
+    print("🔧 测试1: 单独处理模式 (doc_analyze)")
     print(f"后端: {backend}")
     print(f"开始时间: {datetime.now().strftime('%H:%M:%S')}")
+    print(f"{'='*80}")
 
-    start_time = time.time()
+    total_start_time = time.time()
+    results = []
 
-    try:
-        # 为每个PDF创建独立的输出目录
-        pdf_output_dir = output_dir / pdf_path.stem / backend
+    for idx, pdf_path in enumerate(pdf_files):
+        print(f"\n处理PDF {idx+1}/{len(pdf_files)}: {pdf_path.name}")
+        start_time = time.time()
 
-        # 使用MinerU处理PDF
-        parse_doc(
-            path_list=[pdf_path],
-            output_dir=pdf_output_dir,
-            lang="ch",  # 中文
-            backend=backend,  # 指定后端
-            method="auto"  # 自动选择方法
-        )
+        try:
+            # 读取PDF文件
+            pdf_bytes = read_fn(pdf_path)
+            pdf_bytes = convert_pdf_bytes_to_bytes_by_pypdfium2(pdf_bytes, 0, None)
+            pdf_file_name = pdf_path.stem
 
-        processing_time = time.time() - start_time
+            # 准备输出目录
+            local_image_dir, local_md_dir = prepare_env(output_dir / "single_processing" / pdf_file_name, pdf_file_name, "vlm")
+            image_writer, md_writer = FileBasedDataWriter(local_image_dir), FileBasedDataWriter(local_md_dir)
 
-        print(f"✅ 处理完成!")
-        print(f"处理时间: {processing_time:.2f}秒")
-        print(f"输出目录: {pdf_output_dir}")
+            print(f"  📁 输出目录: {local_md_dir}")
 
-        # 统计输出文件
-        output_files = []
-        if pdf_output_dir.exists():
-            for file in pdf_output_dir.rglob("*"):
-                if file.is_file():
-                    output_files.append(file.relative_to(pdf_output_dir))
+            # 使用doc_analyze处理单个PDF
+            middle_json, infer_result = doc_analyze(
+                pdf_bytes,
+                image_writer=image_writer,
+                backend=backend[4:],  # 去掉"vlm-"前缀
+                server_url=None
+            )
 
-        print(f"生成文件数量: {len(output_files)}")
+            # 处理输出文件（参考demo.py的_process_output）
+            pdf_info = middle_json["pdf_info"]
+            _process_output(
+                pdf_info, pdf_bytes, pdf_file_name, local_md_dir, local_image_dir,
+                md_writer, f_draw_layout_bbox=True, f_draw_span_bbox=False, f_dump_orig_pdf=True,
+                f_dump_md=True, f_dump_content_list=True, f_dump_middle_json=True, f_dump_model_output=True,
+                f_make_md_mode=MakeMode.MM_MD, middle_json=middle_json, model_output=infer_result, is_pipeline=False
+            )
 
-        # 检查关键文件
-        md_files = [f for f in output_files if f.suffix == '.md']
-        json_files = [f for f in output_files if f.suffix == '.json']
-        img_files = [f for f in output_files if f.suffix.lower() in ['.jpg', '.jpeg', '.png']]
+            processing_time = time.time() - start_time
 
-        print(f"  - Markdown文件: {len(md_files)}")
-        print(f"  - JSON文件: {len(json_files)}")
-        print(f"  - 图片文件: {len(img_files)}")
+            # 统计生成的文件
+            output_files = list(Path(local_md_dir).rglob("*")) if Path(local_md_dir).exists() else []
+            md_files = [f for f in output_files if f.suffix == '.md']
+            json_files = [f for f in output_files if f.suffix == '.json']
+            img_files = [f for f in output_files if f.suffix.lower() in ['.jpg', '.jpeg', '.png']]
 
-        return {
-            'pdf_name': pdf_path.name,
-            'status': 'success',
-            'processing_time': processing_time,
-            'output_files': len(output_files),
-            'md_files': len(md_files),
-            'json_files': len(json_files),
-            'img_files': len(img_files),
-            'output_dir': str(pdf_output_dir)
-        }
+            result = {
+                'pdf_name': pdf_file_name,
+                'status': 'success',
+                'processing_time': processing_time,
+                'output_files': len(output_files),
+                'md_files': len(md_files),
+                'json_files': len(json_files),
+                'img_files': len(img_files),
+                'output_dir': str(local_md_dir)
+            }
 
-    except Exception as e:
-        processing_time = time.time() - start_time
-        print(f"❌ 处理失败: {e}")
-        return {
-            'pdf_name': pdf_path.name,
-            'status': 'error',
-            'error': str(e),
-            'processing_time': processing_time
-        }
+            results.append(result)
+            print(f"  ✅ 处理完成: {processing_time:.2f}s, 生成 {len(output_files)} 个文件")
+            print(f"     - Markdown: {len(md_files)}, JSON: {len(json_files)}, Images: {len(img_files)}")
 
-def run_batch_test():
-    """运行批量测试"""
-    print("🚀 MinerU 批量测试开始")
-    print(f"测试时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        except Exception as e:
+            processing_time = time.time() - start_time
+            print(f"  ❌ 处理失败: {e}")
+            results.append({
+                'pdf_name': pdf_path.stem,
+                'status': 'error',
+                'error': str(e),
+                'processing_time': processing_time
+            })
 
-    # 设置路径
-    demo_dir = "/home/ubuntu/MinerU/demo/pdfs"
-    output_base_dir = Path("/home/ubuntu/MinerU/batch_test_output")
+    total_time = time.time() - total_start_time
+    successful_results = [r for r in results if r['status'] == 'success']
 
-    # 获取所有PDF文件
-    pdf_files = get_pdf_files(demo_dir)
-
-    if not pdf_files:
-        print("❌ 未找到PDF文件")
-        return
-
-    print(f"📄 找到 {len(pdf_files)} 个PDF文件:")
-    for i, pdf_file in enumerate(pdf_files, 1):
-        file_size = pdf_file.stat().st_size / 1024 / 1024  # MB
-        print(f"  {i}. {pdf_file.name} ({file_size:.2f} MB)")
-
-    # 选择要测试的后端
-    backends = ["pipeline", "vlm-vllm-engine"]
-
-    # 处理每个PDF文件
-    all_results = []
-
-    for backend in backends:
-        print(f"\n🔧 使用后端: {backend}")
-
-        backend_results = []
-        backend_start_time = time.time()
-
-        for i, pdf_file in enumerate(pdf_files):
-            result = process_single_pdf(pdf_file, output_base_dir, backend, i, len(pdf_files))
-            backend_results.append(result)
-            all_results.append(result)
-
-        backend_total_time = time.time() - backend_start_time
-        successful_pdfs = [r for r in backend_results if r['status'] == 'success']
-
-        print(f"\n📊 {backend} 后端统计:")
-        print(f"  总处理时间: {backend_total_time:.2f}秒")
-        print(f"  成功处理: {len(successful_pdfs)}/{len(pdf_files)}")
-
-        if successful_pdfs:
-            avg_time = sum(r['processing_time'] for r in successful_pdfs) / len(successful_pdfs)
-            total_files = sum(r['output_files'] for r in successful_pdfs)
-            total_md = sum(r['md_files'] for r in successful_pdfs)
-            total_img = sum(r['img_files'] for r in successful_pdfs)
-
-            print(f"  平均处理时间: {avg_time:.2f}秒/PDF")
-            print(f"  总生成文件: {total_files}个")
-            print(f"  - Markdown: {total_md}个")
-            print(f"  - 图片: {total_img}个")
-
-    # 生成总结报告
-    print(f"\n{'='*60}")
-    print("📋 批量测试总结报告")
-    print(f"{'='*60}")
-
-    successful_results = [r for r in all_results if r['status'] == 'success']
-    failed_results = [r for r in all_results if r['status'] == 'error']
-
-    print(f"总处理任务: {len(all_results)}")
-    print(f"成功: {len(successful_results)}")
-    print(f"失败: {len(failed_results)}")
+    print(f"\n📊 单独处理统计:")
+    print(f"  总处理时间: {total_time:.2f}s")
+    print(f"  成功处理: {len(successful_results)}/{len(pdf_files)}")
 
     if successful_results:
-        print(f"\n✅ 成功处理的PDF:")
-        for result in successful_results:
-            print(f"  - {result['pdf_name']}: {result['processing_time']:.2f}秒, "
-                  f"{result['output_files']}个文件 ({result['md_files']}md, {result['img_files']}img)")
+        avg_time = sum(r['processing_time'] for r in successful_results) / len(successful_results)
+        total_files = sum(r['output_files'] for r in successful_results)
+        total_pages = sum(len(md_writer) for md_writer in [0])  # 这里可以改进
 
-    if failed_results:
-        print(f"\n❌ 处理失败的PDF:")
-        for result in failed_results:
-            print(f"  - {result['pdf_name']}: {result['error']}")
+        print(f"  平均处理时间: {avg_time:.2f}s/PDF")
+        print(f"  总生成文件: {total_files}个")
 
-    # 性能对比
-    print(f"\n🏆 后端性能对比:")
-    for backend in backends:
-        backend_successful = [r for r in successful_results if backend in r['output_dir']]
-        if backend_successful:
-            avg_time = sum(r['processing_time'] for r in backend_successful) / len(backend_successful)
-            total_files = sum(r['output_files'] for r in backend_successful)
-            print(f"  {backend}:")
-            print(f"    - 成功处理: {len(backend_successful)}个PDF")
-            print(f"    - 平均处理时间: {avg_time:.2f}秒")
-            print(f"    - 总生成文件: {total_files}个")
-
-    print(f"\n🎁 所有输出文件保存在: {output_base_dir}")
-    print(f"🎉 批量测试完成! 时间: {datetime.now().strftime('%H:%M:%S')}")
+    return results, total_time
 
 
-def load_pdf_bytes(pdf_path):
-    """加载PDF文件字节数据"""
-    with open(pdf_path, 'rb') as f:
-        return f.read()
+def test_batch_processing(pdf_files, output_dir, backend="vlm-vllm-engine"):
+    """
+    测试2: 批量处理模式 - 使用batch_doc_analyze一次性处理所有PDF
+    """
+    print(f"\n{'='*80}")
+    print("🚀 测试2: 批量处理模式 (batch_doc_analyze)")
+    print(f"后端: {backend}")
+    print(f"开始时间: {datetime.now().strftime('%H:%M:%S')}")
+    print(f"{'='*80}")
+
+    total_start_time = time.time()
+
+    try:
+        # 准备所有PDF的字节数据
+        pdf_bytes_list = []
+        pdf_file_names = []
+
+        for pdf_path in pdf_files:
+            pdf_bytes = read_fn(pdf_path)
+            pdf_bytes = convert_pdf_bytes_to_bytes_by_pypdfium2(pdf_bytes, 0, None)
+            pdf_bytes_list.append(pdf_bytes)
+            pdf_file_names.append(pdf_path.stem)
+            print(f"  📄 加载成功: {pdf_path.name}")
+
+        print(f"\n🔄 开始批量处理 {len(pdf_bytes_list)} 个PDF...")
+
+        # 准备图像写入器列表
+        image_writers = []
+        output_dirs = []
+
+        for pdf_file_name in pdf_file_names:
+            local_image_dir, local_md_dir = prepare_env(output_dir / "batch_processing" / pdf_file_name, pdf_file_name, "vlm")
+            image_writer = FileBasedDataWriter(local_image_dir)
+            image_writers.append(image_writer)
+            output_dirs.append((local_image_dir, local_md_dir))
+
+        # 使用batch_doc_analyze批量处理
+        all_middle_json, batch_results = batch_doc_analyze(
+            pdf_bytes_list=pdf_bytes_list,
+            image_writer_list=image_writers,
+            backend=backend[4:],  # 去掉"vlm-"前缀
+            server_url=None
+        )
+
+        batch_processing_time = time.time() - total_start_time
+
+        print(f"✅ 批量推理完成: {batch_processing_time:.2f}s")
+
+        # 处理输出文件
+        results = []
+
+        # batch_results包含所有页面的结果，需要按PDF分割
+        # 首先计算每个PDF的页数
+        images_count_per_pdf = []
+        for pdf_bytes in pdf_bytes_list:
+            images_list, _ = load_images_from_pdf(pdf_bytes, image_type=ImageType.PIL)
+            images_count_per_pdf.append(len(images_list))
+
+        # 分割batch_results
+        result_start_idx = 0
+        for idx, (pdf_file_name, middle_json, (local_image_dir, local_md_dir)) in enumerate(zip(pdf_file_names, all_middle_json, output_dirs)):
+            print(f"\n📝 处理输出文件: {pdf_file_name}")
+
+            try:
+                md_writer = FileBasedDataWriter(local_md_dir)
+                pdf_info = middle_json["pdf_info"]
+                pdf_bytes = pdf_bytes_list[idx]
+
+                # 获取当前PDF的推理结果
+                current_pdf_pages = images_count_per_pdf[idx]
+                current_result = batch_results[result_start_idx:result_start_idx + current_pdf_pages]
+                result_start_idx += current_pdf_pages
+
+                _process_output(
+                    pdf_info, pdf_bytes, pdf_file_name, local_md_dir, local_image_dir,
+                    md_writer, f_draw_layout_bbox=True, f_draw_span_bbox=False, f_dump_orig_pdf=True,
+                    f_dump_md=True, f_dump_content_list=True, f_dump_middle_json=True, f_dump_model_output=True,
+                    f_make_md_mode=MakeMode.MM_MD, middle_json=middle_json, model_output=current_result, is_pipeline=False
+                )
+
+                # 统计生成的文件
+                output_files = list(Path(local_md_dir).rglob("*")) if Path(local_md_dir).exists() else []
+                md_files = [f for f in output_files if f.suffix == '.md']
+                json_files = [f for f in output_files if f.suffix == '.json']
+                img_files = [f for f in output_files if f.suffix.lower() in ['.jpg', '.jpeg', '.png']]
+
+                results.append({
+                    'pdf_name': pdf_file_name,
+                    'status': 'success',
+                    'processing_time': batch_processing_time / len(pdf_files),  # 平均时间
+                    'output_files': len(output_files),
+                    'md_files': len(md_files),
+                    'json_files': len(json_files),
+                    'img_files': len(img_files),
+                    'output_dir': str(local_md_dir)
+                })
+
+                print(f"  ✅ 输出完成: 生成 {len(output_files)} 个文件")
+                print(f"     - Markdown: {len(md_files)}, JSON: {len(json_files)}, Images: {len(img_files)}")
+
+            except Exception as e:
+                print(f"  ❌ 输出处理失败: {e}")
+                results.append({
+                    'pdf_name': pdf_file_name,
+                    'status': 'output_error',
+                    'error': str(e),
+                    'processing_time': 0
+                })
+
+        # 关闭所有写入器 (FileBasedDataWriter没有close方法，不需要显式关闭)
+        pass
+
+        return results, batch_processing_time, {}
+
+    except Exception as e:
+        print(f"❌ 批量处理失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return [], 0, {}
 
 
-def create_mock_image_writer(output_dir):
-    """创建模拟的图像写入器"""
-    class MockImageWriter:
-        def __init__(self, output_dir):
-            self.output_dir = output_dir
-            self.image_count = 0
-
-        def write(self, data, filename):
-            # 模拟写入操作，不实际保存文件
-            self.image_count += 1
-            return f"mock_{filename}"
-
-        def close(self):
-            pass
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc_val, exc_tb):
-            self.close()
-
-    return MockImageWriter
-
-
-def test_vlm_batch_performance():
-    """VLM批量处理性能对比测试"""
-    print("\n" + "="*80)
-    print("🚀 VLM批量处理性能对比测试")
+def run_performance_comparison():
+    """运行性能对比测试"""
+    print("🚀 MinerU VLM批量处理性能对比测试")
     print(f"测试时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("="*80)
 
     # 设置路径
     demo_dir = "/home/ubuntu/MinerU/demo/pdfs"
-    output_base_dir = Path("/home/ubuntu/MinerU/vlm_batch_test_output")
+    output_base_dir = Path("/home/ubuntu/MinerU/vlm_performance_test")
     output_base_dir.mkdir(exist_ok=True)
 
     # 获取PDF文件
@@ -242,153 +274,63 @@ def test_vlm_batch_performance():
         print("❌ 未找到PDF文件")
         return
 
-    # 限制测试文件数量（避免处理时间过长）
-    max_files = min(3, len(pdf_files))  # 最多测试3个文件
+    # 限制测试文件数量
+    max_files = min(3, len(pdf_files))
     test_pdf_files = pdf_files[:max_files]
 
-    print(f"📄 选择测试文件 ({max_files}个):")
+    print(f"\n📄 选择测试文件 ({max_files}个):")
     for i, pdf_file in enumerate(test_pdf_files, 1):
         file_size = pdf_file.stat().st_size / 1024 / 1024  # MB
         print(f"  {i}. {pdf_file.name} ({file_size:.2f} MB)")
 
-    # 加载PDF字节数据
-    pdf_bytes_list = []
-    for pdf_file in test_pdf_files:
-        try:
-            pdf_bytes = load_pdf_bytes(pdf_file)
-            pdf_bytes_list.append(pdf_bytes)
-            print(f"✅ 加载成功: {pdf_file.name}")
-        except Exception as e:
-            print(f"❌ 加载失败 {pdf_file.name}: {e}")
-            return
+    # 使用vlm-vllm-engine后端
+    backend = "vlm-vllm-engine"
 
-    # 创建图像写入器列表
-    mock_writer_class = create_mock_image_writer(output_base_dir)
-    image_writers = [mock_writer_class(output_base_dir / f"pdf_{i}") for i in range(len(pdf_bytes_list))]
+    # 测试1: 单独处理
+    single_results, single_total_time = test_single_processing(test_pdf_files, output_base_dir, backend)
 
-    # VLM配置（使用vllm-engine）
-    vlm_config = {
-        "backend": "vllm-engine",
-        "model_path": None,  # 使用默认模型
-        "server_url": None,
-        "gpu_memory_utilization": 0.8,
-        "max_model_len": 8192,
-    }
-
-    print(f"\n🔧 使用VLM配置:")
-    for key, value in vlm_config.items():
-        print(f"  {key}: {value}")
-
-    # 测试1: 单独处理（使用doc_analyze）
-    print(f"\n{'-'*60}")
-    print("📊 测试1: 单独处理 (doc_analyze)")
-    print(f"{'-'*60}")
-
-    single_start_time = time.time()
-    single_results = []
-
-    try:
-        # 获取模型实例（复用，避免重复初始化）
-        predictor = ModelSingleton().get_model(**vlm_config)
-
-        for i, (pdf_bytes, pdf_file) in enumerate(zip(pdf_bytes_list, test_pdf_files)):
-            print(f"\n处理PDF {i+1}/{len(pdf_bytes_list)}: {pdf_file.name}")
-            start_time = time.time()
-
-            try:
-                # 使用doc_analyze处理单个PDF
-                middle_json, results = doc_analyze(
-                    pdf_bytes=pdf_bytes,
-                    image_writer=image_writers[i],
-                    predictor=predictor,
-                    **vlm_config
-                )
-
-                processing_time = time.time() - start_time
-                single_results.append({
-                    'pdf_name': pdf_file.name,
-                    'processing_time': processing_time,
-                    'pages': len(results),
-                    'status': 'success'
-                })
-
-                print(f"✅ 单独处理完成: {processing_time:.2f}s, {len(results)}页")
-
-            except Exception as e:
-                processing_time = time.time() - start_time
-                print(f"❌ 单独处理失败: {e}")
-                single_results.append({
-                    'pdf_name': pdf_file.name,
-                    'processing_time': processing_time,
-                    'status': 'error',
-                    'error': str(e)
-                })
-
-    except Exception as e:
-        print(f"❌ 单独处理测试失败: {e}")
-        return
-
-    single_total_time = time.time() - single_start_time
-
-    # 测试2: 批量处理（使用batch_doc_analyze）
-    print(f"\n{'-'*60}")
-    print("📊 测试2: 批量处理 (batch_doc_analyze)")
-    print(f"{'-'*60}")
-
-    batch_start_time = time.time()
-
-    try:
-        # 使用batch_doc_analyze处理所有PDF
-        print(f"\n开始批量处理 {len(pdf_bytes_list)} 个PDF...")
-
-        all_middle_json, batch_results, performance_stats = batch_doc_analyze(
-            pdf_bytes_list=pdf_bytes_list,
-            image_writer_list=image_writers,
-            predictor=predictor,
-            **vlm_config
-        )
-
-        batch_total_time = time.time() - batch_start_time
-        batch_processing_time = performance_stats.get('total_time', batch_total_time)
-
-        print(f"✅ 批量处理完成: {batch_processing_time:.2f}s")
-
-    except Exception as e:
-        print(f"❌ 批量处理测试失败: {e}")
-        import traceback
-        traceback.print_exc()
-        return
+    # 测试2: 批量处理 (暂时注释掉，先确保单独处理正常工作)
+    # batch_results, batch_total_time, performance_stats = test_batch_processing(test_pdf_files, output_base_dir, backend)
+    # 获取批量处理的推理结果数量
+    # batch_pages_count = len(batch_results) if batch_results else 0
+    batch_results = []
+    batch_total_time = 0
+    batch_pages_count = 0
 
     # 性能对比分析
     print(f"\n{'='*80}")
     print("🏆 性能对比分析")
     print(f"{'='*80}")
 
-    # 统计单独处理结果
     successful_single = [r for r in single_results if r['status'] == 'success']
-    total_single_time = sum(r['processing_time'] for r in successful_single)
-    total_pages_single = sum(r['pages'] for r in successful_single)
+    successful_batch = [r for r in batch_results if r['status'] == 'success']
 
     print(f"📈 单独处理统计:")
     print(f"  成功处理: {len(successful_single)}/{len(test_pdf_files)}个PDF")
-    print(f"  总处理时间: {total_single_time:.2f}s")
-    print(f"  平均处理时间: {total_single_time/len(successful_single):.2f}s/PDF" if successful_single else "  平均处理时间: N/A")
-    print(f"  总处理页数: {total_pages_single}")
-    print(f"  处理速度: {total_pages_single/total_single_time:.2f}页/s" if total_single_time > 0 else "  处理速度: N/A")
+    print(f"  总处理时间: {single_total_time:.2f}s")
+    if successful_single:
+        avg_time = sum(r['processing_time'] for r in successful_single) / len(successful_single)
+        total_files = sum(r['output_files'] for r in successful_single)
+        print(f"  平均处理时间: {avg_time:.2f}s/PDF")
+        print(f"  总生成文件: {total_files}个")
 
     print(f"\n📊 批量处理统计:")
-    print(f"  处理PDF数量: {performance_stats.get('total_pdfs', len(pdf_bytes_list))}")
-    print(f"  总处理时间: {batch_processing_time:.2f}s")
-    print(f"  总处理页数: {performance_stats.get('total_images', len(batch_results))}")
-    print(f"  处理速度: {performance_stats.get('inference_speed_images_per_sec', 0):.2f}页/s")
+    print(f"  处理PDF数量: {len(test_pdf_files)}")
+    print(f"  总处理时间: {batch_total_time:.2f}s")
+    print(f"  总图像数量: {batch_pages_count}")
+    if batch_total_time > 0 and batch_pages_count > 0:
+        print(f"  推理速度: {batch_pages_count/batch_total_time:.2f}页/s")
 
     # 性能提升计算
-    if total_single_time > 0 and batch_processing_time > 0:
-        speedup = total_single_time / batch_processing_time
-        time_saved = total_single_time - batch_processing_time
-        efficiency_gain = (time_saved / total_single_time) * 100
+    if successful_single and successful_batch and batch_total_time > 0:
+        single_time_sum = sum(r['processing_time'] for r in successful_single)
+        speedup = single_time_sum / batch_total_time
+        time_saved = single_time_sum - batch_total_time
+        efficiency_gain = (time_saved / single_time_sum) * 100
 
         print(f"\n🎯 性能提升:")
+        print(f"  单独处理总时间: {single_time_sum:.2f}s")
+        print(f"  批量处理总时间: {batch_total_time:.2f}s")
         print(f"  加速比: {speedup:.2f}x")
         print(f"  节省时间: {time_saved:.2f}s ({efficiency_gain:.1f}%)")
 
@@ -399,21 +341,23 @@ def test_vlm_batch_performance():
 
     # 详细结果对比
     print(f"\n📋 详细处理结果:")
-    print(f"{'PDF文件':<20} {'单独处理时间':<15} {'批量处理包含':<15}")
-    print(f"{'-'*50}")
+    print(f"{'PDF文件':<20} {'单独处理':<15} {'批量处理':<15} {'状态':<10}")
+    print(f"{'-'*60}")
 
-    for i, (single_result, pdf_file) in enumerate(zip(single_results, test_pdf_files)):
-        single_time = f"{single_result['processing_time']:.2f}s" if single_result['status'] == 'success' else "失败"
-        batch_included = "✅ 包含" if single_result['status'] == 'success' else "N/A"
-        print(f"{pdf_file.name:<20} {single_time:<15} {batch_included:<15}")
+    for pdf_file in test_pdf_files:
+        single_result = next((r for r in single_results if r['pdf_name'] == pdf_file.stem), None)
+        batch_result = next((r for r in batch_results if r['pdf_name'] == pdf_file.stem), None)
 
-    print(f"\n🎁 测试输出保存在: {output_base_dir}")
-    print(f"🎉 VLM批量对比测试完成! 时间: {datetime.now().strftime('%H:%M:%S')}")
+        single_time = f"{single_result['processing_time']:.2f}s" if single_result and single_result['status'] == 'success' else "失败"
+        batch_time = f"{batch_result['processing_time']:.2f}s" if batch_result and batch_result['status'] == 'success' else "失败"
+        status = "✅" if (single_result and single_result['status'] == 'success' and
+                         batch_result and batch_result['status'] == 'success') else "⚠️"
+
+        print(f"{pdf_file.stem:<20} {single_time:<15} {batch_time:<15} {status:<10}")
+
+    print(f"\n🎁 所有输出文件保存在: {output_base_dir}")
+    print(f"🎉 性能对比测试完成! 时间: {datetime.now().strftime('%H:%M:%S')}")
 
 
 if __name__ == "__main__":
-    # 运行原始的批量测试
-    run_batch_test()
-
-    # 运行VLM批量对比测试
-    test_vlm_batch_performance()
+    run_performance_comparison()
