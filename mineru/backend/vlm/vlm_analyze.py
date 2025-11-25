@@ -177,15 +177,33 @@ def batch_doc_analyze(
     all_images_list = []
     all_pdf_docs = []
     images_count_per_pdf = []  # 记录每个PDF的图像数量
+    pdf_processing_status = []  # 记录每个PDF的处理状态
 
     # 遍历所有PDF文档，加载图像并拼接
     for pdf_bytes in pdf_bytes_list:
-        images_list, pdf_doc = load_images_from_pdf(pdf_bytes, image_type=ImageType.PIL)
-        all_images_list.extend(images_list)
-        all_pdf_docs.append(pdf_doc)
-        images_count_per_pdf.append(len(images_list))
+        try:
+            images_list, pdf_doc = load_images_from_pdf(pdf_bytes, image_type=ImageType.PIL)
+            all_images_list.extend(images_list)
+            all_pdf_docs.append(pdf_doc)
+            images_count_per_pdf.append(len(images_list))
+            pdf_processing_status.append(True)  # 标记为成功处理
+        except Exception as e:
+            # 捕获load_images_from_pdf异常，记录失败状态
+            logger.warning(f"Failed to load images from PDF: {e}")
+            # 不添加空列表到all_images_list，因为后面会通过images_count_per_pdf来正确处理
+            all_pdf_docs.append(None)   # 添加None作为pdf_doc
+            images_count_per_pdf.append(0)  # 图像数量为0
+            pdf_processing_status.append(False)  # 标记为处理失败
 
-    images_pil_list = [image_dict["img_pil"] for image_dict in all_images_list]
+    # 正确生成images_pil_list，只处理有效的图像
+    images_pil_list = []
+    for image_dict in all_images_list:
+        if image_dict and isinstance(image_dict, dict) and "img_pil" in image_dict:
+            images_pil_list.append(image_dict["img_pil"])
+
+    # 如果没有有效的图像，直接返回空结果
+    if not images_pil_list:
+        return [None] * len(pdf_bytes_list), []
 
     # load_images_time = round(time.time() - load_images_start, 2)
     # logger.info(f"load images cost: {load_images_time}, speed: {round(len(images_base64_list)/load_images_time, 3)} images/s")
@@ -199,9 +217,19 @@ def batch_doc_analyze(
     all_middle_json = []
     image_idx = 0
 
-    for i, pdf_doc in enumerate(all_pdf_docs):
+    for i, (pdf_doc, is_success) in enumerate(zip(all_pdf_docs, pdf_processing_status)):
+        if not is_success or pdf_doc is None:
+            # 对于处理失败的PDF，返回None
+            all_middle_json.append(None)
+            continue
+
         # 获取当前PDF的图像数量
         current_pdf_images_count = images_count_per_pdf[i]
+
+        if current_pdf_images_count == 0:
+            # 对于没有图像的PDF，返回None
+            all_middle_json.append(None)
+            continue
 
         # 获取当前PDF的图像列表和结果
         current_images_list = all_images_list[image_idx:image_idx + current_pdf_images_count]
@@ -216,7 +244,6 @@ def batch_doc_analyze(
         image_idx += current_pdf_images_count
 
     return all_middle_json, results
-
 
 async def aio_doc_analyze(
     pdf_bytes,
