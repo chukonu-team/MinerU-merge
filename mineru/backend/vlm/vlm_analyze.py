@@ -134,6 +134,30 @@ class ModelSingleton:
         return self._models[key]
 
 
+def doc_analyze_with_images(
+    images_list,
+    pdf_doc,
+    image_writer: DataWriter | None,
+    predictor: MinerUClient | None = None,
+    backend="transformers",
+    model_path: str | None = None,
+    server_url: str | None = None,
+    **kwargs,
+):
+    if predictor is None:
+        predictor = ModelSingleton().get_model(backend, model_path, server_url, **kwargs)
+
+    images_pil_list = [image_dict["img_pil"] for image_dict in images_list]
+
+    # infer_start = time.time()
+    results = predictor.batch_two_step_extract(images=images_pil_list)
+    # infer_time = round(time.time() - infer_start, 2)
+    # logger.info(f"infer finished, cost: {infer_time}, speed: {round(len(results)/infer_time, 3)} page/s")
+
+    middle_json = result_to_middle_json(results, images_list, pdf_doc, image_writer)
+    return middle_json, results
+
+
 def doc_analyze(
     pdf_bytes,
     image_writer: DataWriter | None,

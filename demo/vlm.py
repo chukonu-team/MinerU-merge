@@ -10,7 +10,9 @@ from mineru.cli.common import convert_pdf_bytes_to_bytes_by_pypdfium2, prepare_e
 from mineru.data.data_reader_writer import FileBasedDataWriter
 from mineru.utils.draw_bbox import draw_layout_bbox, draw_span_bbox
 from mineru.utils.enum_class import MakeMode
-from mineru.backend.vlm.vlm_analyze import doc_analyze as vlm_doc_analyze
+from mineru.backend.vlm.vlm_analyze import doc_analyze_with_images
+from mineru.utils.pdf_image_tools import load_images_from_pdf
+from mineru.utils.enum_class import ImageType
 from mineru.backend.pipeline.pipeline_middle_json_mkcontent import union_make as pipeline_union_make
 from mineru.backend.vlm.vlm_middle_json_mkcontent import union_make as vlm_union_make
 from mineru.utils.guess_suffix_or_lang import guess_suffix_by_path
@@ -49,7 +51,10 @@ def do_parse(
         pdf_bytes = convert_pdf_bytes_to_bytes_by_pypdfium2(pdf_bytes, start_page_id, end_page_id)
         local_image_dir, local_md_dir = prepare_env(output_dir, pdf_file_name, parse_method)
         image_writer, md_writer = FileBasedDataWriter(local_image_dir), FileBasedDataWriter(local_md_dir)
-        middle_json, infer_result = vlm_doc_analyze(pdf_bytes, image_writer=image_writer, backend=backend, server_url=server_url)
+
+        # Load images externally and pass to the new function
+        images_list, pdf_doc = load_images_from_pdf(pdf_bytes, image_type=ImageType.PIL)
+        middle_json, infer_result = doc_analyze_with_images(images_list, pdf_doc, image_writer=image_writer, backend=backend, server_url=server_url)
 
         pdf_info = middle_json["pdf_info"]
 
