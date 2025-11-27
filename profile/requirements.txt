@@ -1,0 +1,21 @@
+# PDF解析性能分析工具所需依赖包
+# 安装命令: pip install -r requirements.txt
+
+# 核心PDF处理库
+pypdfium2==4.30.0
+Pillow>=10.0.0
+
+# 数据处理和科学计算
+numpy>=1.21.0
+
+# 日志记录
+loguru>=0.7.0
+
+# 可选：性能分析可视化工具
+# memory-profiler  # 内存使用分析
+# line-profiler     # 行级性能分析
+# snakeviz          # profile数据可视化
+
+# 如果需要GPU加速（可选）
+# torch>=2.0.0
+# torchvision
