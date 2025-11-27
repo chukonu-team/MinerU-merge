@@ -18,26 +18,15 @@ from obs import ObsClient
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# 目标OBS的AK/SK（上传到的OBS）
-# TARGET_OBS_AK = "HPUAZR9P6FSDWZD4JTB7"
-# TARGET_OBS_SK = "uqWyJjs5lxPBDLOH5F7Ef8fgXQQsZl6JKQEBirFR"
-# TARGET_OBS_URL = "https://obs.cn-north-4.myhuaweicloud.com"
-# TARGET_OBS_BUCKET = "purchasing-data"
-
-# TARGET_OBS_AK = "HPUAQGVZS7479U6898B9"
-# TARGET_OBS_SK = "MwanHx3or6l0BQ2LFsH7J5indPvzfseAWySnIEDb"
-# TARGET_OBS_URL = "https://obs.cn-north-4.myhuaweicloud.com"
-# TARGET_OBS_BUCKET = "chukonu-data"
-
-TARGET_OBS_AK = "HPUAH2YIGS6CIVOYMTP4"
-TARGET_OBS_SK = "7QYOzrsAe253N9DK391uKjhq56cbbwyK7Erq1qGS"
+TARGET_OBS_AK = "******"
+TARGET_OBS_SK = "******"
 TARGET_OBS_URL = "https://obs.cn-north-4.myhuaweicloud.com"
 TARGET_OBS_BUCKET = "google-scholar"
 
 
 # 源S3的配置
-S3_ACCESS_KEY = "DUA0LTTMFAX1YE0NK0IS"  # 请替换为S3的访问密钥
-S3_SECRET_KEY = "CyiHHYndYAD6ZON8PV4y1lP6zdytb6GXxjzlxSIC"  # 请替换为S3的秘密密钥
+S3_ACCESS_KEY = "******"  # 请替换为S3的访问密钥
+S3_SECRET_KEY = "******"  # 请替换为S3的秘密密钥
 S3_ENDPOINT = "http://s3.bz1stor1.paratera.com"  # 请替换为S3的端点URL
 S3_REGION = "us-east-1"  # 请替换为S3的区域
 S3_BUCKET = "batch2"

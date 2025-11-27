@@ -48,18 +48,6 @@ def process_bucket(
     object_keys = get_keys_from_txt(s3_bucket, key_path)
     print(f"Bucket {bucket_index} has {len(object_keys)} files to process")
 
-    processed_keys_path = os.environ.get("PROCESSED_KEYS_PATH")
-    processed_keys_set = set()
-    if os.path.exists(processed_keys_path):
-        with open(processed_keys_path, 'r') as f:
-            for line in f:
-                key = line.strip()
-                processed_keys_set.add(key)
-
-        for object_key in object_keys:
-            if object_key in processed_keys_set:
-                object_keys.remove(object_key)
-
     # 创建本地临时目录
     pdf_dir = f"/mnt/data/pdf/{bucket_index}"
     if not os.path.exists(pdf_dir):

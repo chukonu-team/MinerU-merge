@@ -1,11 +1,16 @@
 import os
 import re
+import logging
 
 import boto3
 
 from botocore.exceptions import ClientError
 from obs import PutObjectHeader, ObsClient
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [PID:%(process)d][%(thread)d] %(levelname)s: %(message)s"
+)
 
 def init_obs_cli(func):
     def wrapper(self, *args, **kwargs):
@@ -40,8 +45,8 @@ class OBSCli:
             is_cname=True,
             region=region,
             signature='v4',
-            max_retry_count=3,
-            timeout=120
+            max_retry_count=6,
+            timeout=300
         )
         self.obs_cli = obs_cli
 
@@ -56,11 +61,11 @@ class OBSCli:
         resp = self.obs_cli.getObject(self.bucket_name, bucket_key, local_path)
         # 返回码为2xx时，接口调用成功，否则接口调用失败
         if resp.status >= 300:
-            print('get object Failed')
-            print('requestId:', resp.requestId)
-            print('errorCode:', resp.errorCode)
-            print('errorMessage:', resp.errorMessage)
-            print('resp:', resp)
+            logging.error(f'get object {bucket_key} Failed\n'
+                          f'requestId:{resp.requestId}\n'
+                          f'errorCode:{resp.errorCode}\n'
+                          f'errorMessage:{resp.errorMessage}\n'
+                          f'resp:{resp}')
             raise Exception()
 
     @init_obs_cli
@@ -68,10 +73,11 @@ class OBSCli:
         resp = self.obs_cli.getObjectMetadata(self.bucket_name, bucket_key)
         # 返回码为2xx时，接口调用成功，否则接口调用失败
         if resp.status >= 300:
-            print('get object Failed')
-            print('requestId:', resp.requestId)
-            print('errorCode:', resp.errorCode)
-            print('errorMessage:', resp.errorMessage)
+            logging.error('get object Failed\n'
+                          f'requestId:{resp.requestId}\n'
+                          f'errorCode:{resp.errorCode}\n'
+                          f'errorMessage:{resp.errorMessage}\n'
+                          f'resp:{resp}')
         return dict(resp.body)
 
     @init_obs_cli
@@ -113,18 +119,19 @@ class OBSCli:
             resp = self.obs_cli.uploadFile(self.bucket_name, objectkey, file_path, partSize, taskNum, enableCheckpoint,
                                            isAttachCrc64=isAttachCrc64)  # 返回码为2xx时，接口调用成功，否则接口调用失败
             if resp.status < 300:
-                # print('Upload File Succeeded')
-                # print('requestId:', resp.requestId)
-                # print('crc64:', resp.body.crc64)
+                # logging.info('Upload File Succeeded')
+                # logging.info('requestId:', resp.requestId)
+                # logging.info('crc64:', resp.body.crc64)
                 return resp.body
             else:
-                print(f'Upload File Failed local_file:{local_path} target bucket_key:{bucket_key}')
-                print('requestId:', resp.requestId)
-                print('errorCode:', resp.errorCode)
-                print('errorMessage:', resp.errorMessage)
+                logging.error(f'Upload File Failed local_file:{local_path} target bucket_key:{bucket_key}\n'
+                              f'requestId:{resp.requestId}\n'
+                              f'errorCode:{resp.errorCode}\n'
+                              f'errorMessage:{resp.errorMessage}\n'
+                              f'resp:{resp}')
         except Exception as e:
-            print(f'Upload File Failed local_file:{local_path} target bucket_key:{bucket_key}')
-            print(e)
+            logging.info(f'Upload File Failed local_file:{local_path} target bucket_key:{bucket_key}')
+            logging.info(e)
 
 def get_s3_client():
     """创建配置了自定义端点的S3客户端"""
@@ -163,12 +170,12 @@ def download_from_s3(bucket_name, key, local_path):
         elif s3_type == 'obs':
             s3_client.get_object(key, local_path)
             s3_client.close()
-        print(f"Downloaded {key} to {local_path}")
+        logging.info(f"Downloaded {key} to {local_path}")
     except ClientError as e:
-        print(f"Error downloading {key} from S3: {e}")
+        logging.info(f"Error downloading {key} from S3: {e}")
         raise
 
-def upload_to_s3(local_path, bucket_name, key):
+def upload_to_s3(local_path: str, bucket_name: str, key: str):
     """上传文件到S3"""
     s3_client = get_s3_client()
     s3_type = os.environ.get('S3_TYPE', 's3')
@@ -177,9 +184,9 @@ def upload_to_s3(local_path, bucket_name, key):
             s3_client.upload_file(local_path, bucket_name, key)
         elif s3_type == 'obs':
             s3_client.put_object(key,local_path)
-        print(f"Uploaded {local_path} to {key}")
+        logging.info(f"Uploaded {local_path} to {key}")
     except ClientError as e:
-        print(f"Error uploading {local_path} to S3: {e}")
+        logging.info(f"Error uploading {local_path} to S3: {e}")
         raise
 
 def check_result_exists(bucket_name: str, result_key: str) -> bool:
@@ -191,23 +198,23 @@ def check_result_exists(bucket_name: str, result_key: str) -> bool:
             s3_client.head_object(Bucket=bucket_name, Key=result_key)
         elif s3_type == 'obs':
             return s3_client.exist_object(result_key)
-        print(f"Result already exists: {result_key}")
+        logging.info(f"Result already exists: {result_key}")
         return True
     except ClientError as e:
         if e.response['Error']['Code'] == '404':
             return False
         else:
-            print(f"Error checking result existence: {e}")
+            logging.info(f"Error checking result existence: {e}")
             raise
 
 
 if __name__ == '__main__':
     os.environ['S3_TYPE'] = 'obs'
     os.environ['AWS_ENDPOINT'] = 'https://google-scholar.obs.cn-north-4.myhuaweicloud.com'
-    os.environ['AWS_ACCESS_KEY_ID'] = '****'
-    os.environ['AWS_SECRET_ACCESS_KEY'] = '******'
+    os.environ['AWS_ACCESS_KEY_ID'] = '********'
+    os.environ['AWS_SECRET_ACCESS_KEY'] = '********'
     os.environ['AWS_DEFAULT_REGION'] = 'cn-north-4'
     # upload_to_s3("../mineru.json", "houdu-data-lake", "tes-data/mineru.json")
     # download_from_s3("google-scholar","pdf/20251113/zzzjzYfCD40J.pdf","/root/wangshd/batch6/tmp")
-    # print(check_result_exists("google-scholar","pdf/20251113/zzzjzYfCD40J.pdf"))
+    # logging.info(check_result_exists("google-scholar","pdf/20251113/zzzjzYfCD40J.pdf"))
     upload_to_s3("/root/wangshd/mineru.tar","obs:google-scholar/25Q3/google-scholar/houdu_bingxing_qingdao/mineru264/batch6/vlm/chunk_keys/")
