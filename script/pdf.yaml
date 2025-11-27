@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: pdf-daemonset
+spec:
+  selector:
+    matchLabels:
+      name: pdf-ds
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: pdf-ds
+    spec:
+      runtimeClassName: nvidia
+      containers:
+        - name: pdf-container  # 添加了容器名称
+          image: 10.242.128.137:5000/mineru:2.6.4
+          imagePullPolicy: Always
+          command: [ "python3", "/data/MinerU/demo/main.py" ]
+          env:
+            - name: PYTHONUNBUFFERED  # 确保Python输出无缓冲
+              value: "1"
+            - name: GPU_IDS
+              value: "0,1,2,3,4,5,6,7"
+            - name: VRAM_SIZE_GB
+              value: "16"
+            - name: WORKERS_PER_GPU
+              value: "2"
+            - name: SHUFFLE
+              value: "false"
+            - name: MAX_PAGES
+              value: "1000"
+            - name: BATCH_SIZE
+              value: "384"
+            - name: BACKEND
+              value: "vllm-engine"
+            - name: MINERU_MODEL_SOURCE
+              value: "local"
+            - name: GPU_MEMORY_UTILIZATION
+              value: "0.45"
+            - name: VLLM_USE_V1    # blackwell 架构配置1，当出现不兼容如T4，设置为0
+              value: "1"
+            - name: PROPORTION
+              value: "0.03"
+            - name: TORCHDYNAMO_VERBOSE
+              value: "1"
+            - name: MINERU_TOOLS_CONFIG_JSON
+              value: "/data/MinerU/mineru.json"
+            - name: OMP_NUM_THREADS
+              value: "3"
+            - name: MKL_NUM_THREADS
+              value: "3"
+            - name: OPENBLAS_NUM_THREADS
+              value: "3"
+          resources:
+            limits:
+              nvidia.com/gpu: 8
+              memory: "900Gi"
+              cpu: "100"
+            requests:
+              nvidia.com/gpu: 8
+              memory: "900Gi"
+              cpu: "100"
+          volumeMounts:
+            - name: scripts
+              mountPath: /data/MinerU
+            - name: mnt
+              mountPath: /mnt
+          securityContext:
+            privileged: true
+      volumes:
+        - name: scripts
+          hostPath:
+            path: /data/MinerU
+        - name: mnt
+          hostPath:
+            path: /ssd/mnt
+            type: DirectoryOrCreate
+      nodeSelector:
+        accelerator: nvidia-gpu

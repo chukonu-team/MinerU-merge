@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: download-daemonset
+  namespace: houdu
+spec:
+  selector:
+    matchLabels:
+      name: download-ds
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: download-ds
+    spec:
+      containers:
+      - name: download-container  # 添加了容器名称
+        image: 10.242.128.137:5000/mineru:2.6.4
+        imagePullPolicy: Always
+        command: [ "python3", "/data/MinerU/demo/download.py" ]
+        env:
+          - name: AWS_ACCESS_KEY_ID
+            value: "****"
+          - name: AWS_SECRET_ACCESS_KEY
+            value: "****"
+          - name: AWS_DEFAULT_REGION
+            value: "cn-north-4"
+          - name: AWS_ENDPOINT
+            value: "https://google-scholar.obs.cn-north-4.myhuaweicloud.com"
+          - name: S3_TYPE
+            value: "obs"
+          - name: S3_BUCKET
+            value: "google-scholar"
+          - name: BUCKET_TXT_KEY_PATH
+            value: "25Q3/google-scholar/houdu_bingxing_qingdao/mineru264/batch6/keys"
+          - name: JSON_MAP_PATH
+            value: "/data/MinerU/demo/bucket_map.json"
+          - name: NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+          - name: PROCESSED_KEYS_PATH
+            value: "/data/MinerU/demo/processed_keys.txt"
+        resources:
+          limits:
+            memory: "8Gi"
+            cpu: "4"
+          requests:
+            memory: "8Gi"
+            cpu: "4"
+        volumeMounts:
+        - name: scripts
+          mountPath: /data/MinerU
+        - name: mnt
+          mountPath: /mnt
+      volumes:
+      - name: scripts
+        hostPath:
+          path: /data/MinerU
+      - name: mnt
+        hostPath:
+          path: /ssd/mnt
+          type: DirectoryOrCreate
+      nodeSelector:
+        accelerator: nvidia-gpu
