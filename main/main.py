@@ -1,14 +1,7 @@
-import json
 import os
-import shutil
 import sys
-import time
-from typing import List
+
 from common import get_subdirectories, has_files
-
-# 现在导入原始脚本
-from ocr_pdf import process_pdfs  # 修正导入的函数名
-
 
 def process():
     # 从环境变量获取作业索引
@@ -20,6 +13,7 @@ def process():
     shuffle = True if shuffle_env == "true" else False
     batch_size = os.getenv("BATCH_SIZE")
     proportion = os.getenv("PROPORTION", 0)
+    use_batch = bool(os.getenv("USE_BATCH", "True"))
 
     pdf_dir = "/mnt/data/pdf"
     list_dir = get_subdirectories(pdf_dir)
@@ -48,6 +42,10 @@ def process():
     input_path = f"/mnt/data/pdf/{index}"
     output_path = f"/mnt/data/output/{index}"
     try:
+        if use_batch:
+            from ocr_pdf_batch import process_pdfs
+        else:
+            from ocr_pdf import process_pdfs
         # 运行处理任务
         process_pdfs(
             input_dir=input_path,
