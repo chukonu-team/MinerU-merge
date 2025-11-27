@@ -15,11 +15,122 @@ from pathlib import Path
 from typing import List
 from dataclasses import dataclass
 import glob
+import linecache
+import functools
 
 # 添加项目根目录到路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from mineru.utils.pdf_image_tools import load_images_from_pdf
+
+
+def line_profiler_decorator(func):
+    """
+    行级性能分析装饰器
+    分析函数中每行代码的执行时间
+    """
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        print(f"\n🔍 开始行级性能分析: {func.__name__}")
+        print("=" * 60)
+
+        # 获取函数源代码
+        import inspect
+        try:
+            source_lines = inspect.getsourcelines(func)[0]
+            start_line = inspect.getsourcelines(func)[1]
+        except Exception as e:
+            print(f"❌ 无法获取源代码: {e}")
+            return func(*args, **kwargs)
+
+        # 执行函数并记录每行时间
+        line_times = {}
+        line_counts = {}
+
+        class LineTracer:
+            def __init__(self, func_name, source_lines, start_line):
+                self.func_name = func_name
+                self.source_lines = source_lines
+                self.start_line = start_line
+                self.line_times = {}
+                self.line_counts = {}
+                self.last_time = None
+                self.last_line = None
+
+            def trace_calls(self, frame, event, arg):
+                if event == 'call' and frame.f_code.co_name == func.__name__:
+                    return self.trace_lines
+                return None
+
+            def trace_lines(self, frame, event, arg):
+                if event == 'line':
+                    line_no = frame.f_lineno
+                    current_time = time.perf_counter()
+
+                    # 如果有上一行，记录其执行时间
+                    if self.last_time is not None and self.last_line is not None:
+                        execution_time = current_time - self.last_time
+
+                        if self.last_line not in self.line_times:
+                            self.line_times[self.last_line] = 0
+                            self.line_counts[self.last_line] = 0
+
+                        self.line_times[self.last_line] += execution_time
+                        self.line_counts[self.last_line] += 1
+
+                    self.last_time = current_time
+                    self.last_line = line_no
+
+                return self.trace_lines
+
+        # 设置跟踪器
+        tracer = LineTracer(func.__name__, source_lines, start_line)
+        sys.settrace(tracer.trace_calls)
+
+        try:
+            start_time = time.perf_counter()
+            result = func(*args, **kwargs)
+            total_time = time.perf_counter() - start_time
+
+            # 恢复跟踪
+            sys.settrace(None)
+
+            # 打印行级分析结果
+            print(f"\n📊 行级性能分析结果 (总耗时: {total_time:.3f}s)")
+            print("-" * 60)
+            print(f"{'行号':<6} {'累计时间(s)':<12} {'调用次数':<8} {'平均时间(ms)':<12} {'代码'}")
+            print("-" * 60)
+
+            # 按时间排序显示
+            sorted_lines = sorted(tracer.line_times.items(), key=lambda x: x[1], reverse=True)
+
+            for line_no, total_time_line in sorted_lines:
+                if total_time_line > 0.001:  # 只显示耗时超过1ms的行
+                    count = tracer.line_counts[line_no]
+                    avg_time_ms = (total_time_line / count) * 1000
+
+                    # 获取源代码
+                    if start_line <= line_no < start_line + len(source_lines):
+                        line_idx = line_no - start_line
+                        if line_idx < len(source_lines):
+                            code_line = source_lines[line_idx].strip()
+                            # 限制显示长度
+                            if len(code_line) > 50:
+                                code_line = code_line[:47] + "..."
+                    else:
+                        code_line = linecache.getline(__file__, line_no).strip()
+
+                    print(f"{line_no:<6} {total_time_line:<12.3f} {count:<8} {avg_time_ms:<12.3f} {code_line}")
+
+            print("-" * 60)
+            return result
+
+        except Exception as e:
+            sys.settrace(None)
+            print(f"❌ 行级分析出错: {e}")
+            raise
+
+    return wrapper
 
 
 @dataclass
@@ -42,6 +153,8 @@ class PDFProfiler:
 
     def __init__(self):
         self.results: List[ProfileResult] = []
+        self.total_load_time = 0.0  # 累计 load_images_from_pdf 调用时间
+        self.load_call_count = 0    # 调用次数统计
 
     def profile_pdf_parsing(
         self,
@@ -136,10 +249,16 @@ class PDFProfiler:
             load_time = time.time() - load_start_time
             images_count = len(images_list)
 
+            # 累计总调用时间和次数
+            self.total_load_time += load_time
+            self.load_call_count += 1
+
             print(f"   解析完成!")
             print(f"   解析耗时: {load_time:.3f}s")
             print(f"   生成图像数量: {images_count}")
             print(f"   平均每页耗时: {load_time / actual_pages:.3f}s")
+            print(f"   累计调用次数: {self.load_call_count}")
+            print(f"   累计总时间: {self.total_load_time:.3f}s")
 
         except Exception as e:
             print(f"   解析失败: {e}")
@@ -391,6 +510,17 @@ class PDFProfiler:
         print("性能分析总结")
         print(f"{'='*60}")
 
+        # 打印 load_images_from_pdf 总调用统计
+        if self.load_call_count > 0:
+            avg_load_time = self.total_load_time / self.load_call_count
+            print(f"\n🔍 load_images_from_pdf 调用统计:")
+            print(f"  总调用次数: {self.load_call_count}")
+            print(f"  累计总时间: {self.total_load_time:.3f}s")
+            print(f"  平均每次调用: {avg_load_time:.3f}s")
+            print(f"  总处理页数: {sum(r.pdf_pages for r in self.results)}")
+            print(f"  平均每页总时间: {self.total_load_time / sum(r.pdf_pages for r in self.results):.3f}s")
+            print("-" * 60)
+
         for i, result in enumerate(self.results, 1):
             file_size_mb = result.pdf_size_bytes / 1024 / 1024
             print(f"\n测试 {i}: {os.path.basename(result.pdf_path)}")
@@ -401,6 +531,7 @@ class PDFProfiler:
             print(f"  处理速度: {result.pdf_pages / result.total_time:.2f} 页/秒")
 
 
+@line_profiler_decorator
 def main():
     """主函数 - 演示如何使用性能分析工具"""
 
