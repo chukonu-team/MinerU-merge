@@ -10,7 +10,7 @@ from mineru.cli.common import convert_pdf_bytes_to_bytes_by_pypdfium2, prepare_e
 from mineru.data.data_reader_writer import FileBasedDataWriter
 from mineru.utils.draw_bbox import draw_layout_bbox, draw_span_bbox
 from mineru.utils.enum_class import MakeMode
-from mineru.backend.vlm.vlm_analyze import doc_analyze_with_images
+from mineru.backend.vlm.vlm_analyze import batch_doc_analyze_with_images
 from mineru.utils.pdf_image_tools import load_images_from_pdf
 from mineru.utils.enum_class import ImageType
 from mineru.backend.pipeline.pipeline_middle_json_mkcontent import union_make as pipeline_union_make
@@ -46,23 +46,54 @@ def do_parse(
 
     f_draw_span_bbox = False
     parse_method = "vlm"
+
+    # Preprocess all PDFs to get images and documents
+    images_lists = []
+    pdf_docs = []
+    image_writer_list = []
+    processed_pdf_bytes_list = []
+    processed_pdf_file_names = []
+    local_md_dirs = []
+    local_image_dirs = []
+    md_writers = []
+
     for idx, pdf_bytes in enumerate(pdf_bytes_list):
         pdf_file_name = pdf_file_names[idx]
         pdf_bytes = convert_pdf_bytes_to_bytes_by_pypdfium2(pdf_bytes, start_page_id, end_page_id)
         local_image_dir, local_md_dir = prepare_env(output_dir, pdf_file_name, parse_method)
         image_writer, md_writer = FileBasedDataWriter(local_image_dir), FileBasedDataWriter(local_md_dir)
 
-        # Load images externally and pass to the new function
+        # Load images externally and store for batch processing
         images_list, pdf_doc = load_images_from_pdf(pdf_bytes, image_type=ImageType.PIL)
-        middle_json, infer_result = doc_analyze_with_images(images_list, pdf_doc, image_writer=image_writer, backend=backend, server_url=server_url)
+        images_lists.append(images_list)
+        pdf_docs.append(pdf_doc)
+        image_writer_list.append(image_writer)
+        processed_pdf_bytes_list.append(pdf_bytes)
+        processed_pdf_file_names.append(pdf_file_name)
+        local_md_dirs.append(local_md_dir)
+        local_image_dirs.append(local_image_dir)
+        md_writers.append(md_writer)
+
+    # Batch process all PDFs
+    all_middle_json, results = batch_doc_analyze_with_images(
+        images_lists, pdf_docs, image_writer_list, backend=backend, server_url=server_url
+    )
+
+    # Process results for each PDF
+    for idx, middle_json in enumerate(all_middle_json):
+        if middle_json is None:
+            logger.warning(f"Failed to process PDF: {processed_pdf_file_names[idx]}")
+            continue
 
         pdf_info = middle_json["pdf_info"]
+        infer_result = results[idx] if idx < len(results) else None
 
         _process_output(
-            pdf_info, pdf_bytes, pdf_file_name, local_md_dir, local_image_dir,
-            md_writer, f_draw_layout_bbox, f_draw_span_bbox, f_dump_orig_pdf,
-            f_dump_md, f_dump_content_list, f_dump_middle_json, f_dump_model_output,
-            f_make_md_mode, middle_json, infer_result, is_pipeline=False
+            pdf_info, processed_pdf_bytes_list[idx], processed_pdf_file_names[idx],
+            local_md_dirs[idx], local_image_dirs[idx], md_writers[idx], f_draw_layout_bbox,
+            f_draw_span_bbox, f_dump_orig_pdf, f_dump_md, f_dump_content_list,
+            f_dump_middle_json, f_dump_model_output, f_make_md_mode, middle_json,
+            infer_result, is_pipeline=False
         )
 
 
