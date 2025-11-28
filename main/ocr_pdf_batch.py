@@ -703,9 +703,6 @@ class SimpleMinerUPool:
 
             logging.info(f"Submitted {len(batches)} tasks to process pool")
 
-            # 设置完成信号
-            self.process_pool.set_complete_signal()
-
             # 收集结果
             start_time = time.time()
 

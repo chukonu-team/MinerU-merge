@@ -120,7 +120,8 @@ def _worker_process(worker_id: int, gpu_id: int, task_queue: mp.Queue,
 
     while not shutdown_event.is_set():
         try:
-            task = task_queue.get(timeout=1.0)
+            # 先尝试获取任务，如果队列为空则等待更长时间
+            task = task_queue.get(timeout=600.0)  # 增加等待时间到10min
             if task is None:
                 break
 
@@ -131,11 +132,26 @@ def _worker_process(worker_id: int, gpu_id: int, task_queue: mp.Queue,
                 result = func(*args, **kwargs_with_gpu)
                 result_queue.put((task_id, 'success', result))
                 task_count += 1
+                print(f"Worker {worker_id} completed task {task_id}")
             except Exception as e:
                 print(f"Worker {worker_id} task error: {e}")
                 result_queue.put((task_id, 'error', str(e)))
         except Empty:
-            continue
+            # GPU队列为空，但不应该立即退出，因为可能有预处理任务正在进行
+            # 检查是否是双缓冲队列模式（通过队列类型判断）
+            if hasattr(task_queue, '__module__') and 'multiprocessing' in str(type(task_queue)):
+                # 这是multiprocessing.Queue，可能是GPU队列
+                # 打印等待信息，便于调试
+                print(f"Worker {worker_id} GPU queue empty, waiting for preprocessing tasks...")
+
+                # 短暂等待，避免过度消耗CPU，给预处理任务时间完成
+                time.sleep(2.0)
+                continue
+            else:
+                # 其他类型的队列，继续等待
+                print(f"Worker {worker_id} waiting for tasks (queue size: {task_queue.qsize()})")
+                time.sleep(1.0)
+                continue
         except Exception as e:
             print(f"Worker {worker_id} unexpected error: {e}")
             break
