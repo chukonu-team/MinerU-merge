@@ -85,20 +85,26 @@ def main():
         print(f"预处理队列大小: {pool.get_preprocessing_queue_size()}")
         print(f"GPU队列大小: {pool.get_gpu_queue_size()}")
 
-        # 等待处理完成
-        print("\n等待处理完成（增强预处理包含图像加载）...")
-        time.sleep(45)  # 给预处理和GPU处理足够的时间
-
-        print(f"\n处理后的状态:")
-        print(f"预处理队列大小: {pool.get_preprocessing_queue_size()}")
-        print(f"GPU队列大小: {pool.get_gpu_queue_size()}")
-
         # 发送完成信号
         pool.set_complete_signal()
 
-        # 收集结果
+        # 收集结果 - 使用与ocr_pdf_batch.py相同的机制
         print("\n收集结果...")
-        result = pool.get_result(timeout=30.0)
+        start_time = time.time()
+
+        # 等待所有任务完成
+        for _ in range(1):  # 我们只有一个批次
+            result = pool.get_result(timeout=120.0)  # 足够长的超时时间
+            if result:
+                task_id, status, data = result
+                print(f"收到结果: task_id={task_id}, status={status}")
+                break
+            else:
+                elapsed = time.time() - start_time
+                print(f"等待结果中...已等待{elapsed:.1f}秒")
+                if elapsed > 100:  # 超时保护
+                    print("等待超时，退出")
+                    break
 
         if result:
             task_id, status, data = result
