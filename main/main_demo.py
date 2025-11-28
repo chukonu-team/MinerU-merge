@@ -17,7 +17,7 @@ def process():
     # 设置环境变量以减少GPU内存使用
     import os
     os.environ["GPU_MEMORY_UTILIZATION"] = "0.5"  # 降低到30%
-    os.environ["BACKEND"] = "vlm-vllm-engine"  # 使用transformers后端代替vLLM
+    os.environ["BACKEND"] = "vllm-engine"  # 使用transformers后端代替vLLM
 
     pdf_dir = "/home/ubuntu/MinerU-merge/demo/pdfs"  # 输入目录
     output_dir = "/tmp/result"  # 输出目录

@@ -332,6 +332,7 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
             image_idx = 0
 
             for i, (pdf_doc, is_success) in enumerate(zip(all_pdf_docs, pdf_processing_status)):
+                logging.info(f"步骤4.1 loop index:{i} - 预处理成功: {is_success}, pdf_doc is None: {pdf_doc is None}")
                 if not is_success or pdf_doc is None:
                     # 对于处理失败的PDF，返回None
                     all_middle_json.append(None)
