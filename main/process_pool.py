@@ -50,9 +50,9 @@ def _preprocessing_worker(worker_id: int, preprocessing_queue: mp.Queue,
                 break
 
             # 将预处理后的任务放入GPU任务队列
-            # 现在使用gpu_processing_task作为GPU函数
-            from ocr_pdf_batch import gpu_processing_task
-            preprocessed_task = (task_id, gpu_processing_task, (preprocessed_result,), kwargs)
+            # 现在使用gpu_processing_task_with_preloaded_images作为GPU函数（基于预加载的图像）
+            from ocr_pdf_batch import gpu_processing_task_with_preloaded_images
+            preprocessed_task = (task_id, gpu_processing_task_with_preloaded_images, (preprocessed_result,), kwargs)
             gpu_task_queue.put(preprocessed_task)
             print(f"Preprocessing worker {worker_id} queued task {task_id} for GPU processing")
 
