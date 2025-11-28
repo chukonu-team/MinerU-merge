@@ -7,12 +7,17 @@ def process():
     # 硬编码配置参数
     gpu_ids = "0"  # 使用GPU 0
     vram_size_gb = "24"  # 24GB显存
-    workers_per_gpu = "1"  # 每个GPU 2个工作进程
+    workers_per_gpu = "1"  # 每个GPU 1个工作进程
     max_pages = "1000"  # 最大页数限制
     shuffle = False  # 不打乱顺序
     batch_size = "384"  # 批处理大小
     proportion = 0  # 处理比例阈值
     use_batch = True  # 使用批处理模式
+
+    # 设置环境变量以减少GPU内存使用
+    import os
+    os.environ["GPU_MEMORY_UTILIZATION"] = "0.5"  # 降低到30%
+    os.environ["BACKEND"] = "vlm-vllm-engine"  # 使用transformers后端代替vLLM
 
     pdf_dir = "/home/ubuntu/MinerU-merge/demo/pdfs"  # 输入目录
     output_dir = "/tmp/result"  # 输出目录

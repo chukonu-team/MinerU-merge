@@ -270,6 +270,7 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
     这部分工作需要GPU，只处理batch_two_step_extract及之后的部分
     """
     start = time.time()
+    logging.info(f"=== GPU处理详细时间分析开始 ===")
 
     # 从预处理数据中获取所有必要信息
     all_images_list = preprocessed_data['all_images_list']
@@ -282,7 +283,8 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
 
     logging.info(f"GPU处理开始（基于预加载图像）: {batch.get('file_names', [])}")
 
-    # 从base64图像数据重建PIL图像列表
+    # 步骤1: 数据预处理 - 从base64图像数据重建PIL图像列表
+    data_preprocess_start = time.time()
     images_pil_list = []
     for image_dict in all_images_list:
         if image_dict and isinstance(image_dict, dict) and "img_base64" in image_dict:
@@ -294,13 +296,17 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
             except Exception as e:
                 logging.warning(f"转换base64图像到PIL失败: {e}")
 
+    data_preprocess_time = time.time() - data_preprocess_start
+    logging.info(f"步骤1 - 数据预处理 (base64→PIL转换): {data_preprocess_time:.2f}秒")
+
     try:
         # 如果没有有效的图像，直接返回空结果
         if not images_pil_list:
             logging.warning("没有有效的图像，返回空结果")
             all_middle_json = [None] * len(all_pdf_docs)
         else:
-            # 获取predictor
+            # 步骤2: 模型初始化
+            model_init_start = time.time()
             backend = os.environ.get("BACKEND", "vllm-engine")
             logging.info(f"backend: {backend}")
 
@@ -311,14 +317,17 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
 
             from mineru.backend.vlm.vlm_analyze import ModelSingleton
             predictor = ModelSingleton().get_model(backend, None, None, **filtered_kwargs)
+            model_init_time = time.time() - model_init_start
+            logging.info(f"步骤2 - 模型初始化: {model_init_time:.2f}秒")
 
-            # GPU推理 - 只调用batch_two_step_extract
+            # 步骤3: GPU推理 - 只调用batch_two_step_extract
             gpu_start = time.time()
             results = predictor.batch_two_step_extract(images=images_pil_list)
             gpu_time = time.time() - gpu_start
-            logging.info(f"GPU推理完毕，耗时{gpu_time:.2f}秒")
+            logging.info(f"步骤3 - GPU推理 (纯AI模型推理): {gpu_time:.2f}秒")
 
-            # 需要为每个PDF文档分别生成middle_json
+            # 步骤4: 结果后处理 - 为每个PDF文档分别生成middle_json
+            postprocess_start = time.time()
             all_middle_json = []
             image_idx = 0
 
@@ -349,62 +358,154 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
                 # 更新图像索引
                 image_idx += current_pdf_images_count
 
-        # 保存结果
+            postprocess_time = time.time() - postprocess_start
+            logging.info(f"步骤4 - 结果后处理 (表格合并、标题优化等): {postprocess_time:.2f}秒")
+
+        # 步骤5: 文件保存 - 保存结果
+        file_save_start = time.time()
         final_results = []
+
+        logging.info(f"=== 步骤5 - 文件保存详细调试开始 ===")
+        logging.info(f"待处理文件数量: {len(all_middle_json)}")
+        logging.info(f"预处理状态列表: {pdf_processing_status}")
+        logging.info(f"batch信息: {batch}")
+
         for i, (middle_json, is_success) in enumerate(zip(all_middle_json, pdf_processing_status)):
+            logging.info(f"--- 处理文件 {i+1}/{len(all_middle_json)} ---")
+            logging.info(f"  预处理成功: {is_success}")
+            logging.info(f"  middle_json是否为None: {middle_json is None}")
+
             if not is_success:
-                # 对于预处理失败的PDF，跳过保存
+                logging.warning(f"  跳过文件 {i+1}: 预处理失败")
                 continue
 
             # 从原始batch信息中获取PDF路径
             if 'files' in batch and i < len(batch['files']):
                 pdf_path = batch['files'][i]
+                logging.info(f"  PDF路径: {pdf_path}")
             else:
+                logging.error(f"  无法获取PDF路径: batch['files']存在={('files' in batch)}, i={i}, len(batch['files'])={len(batch.get('files', []))}")
                 continue
 
             pdf_file_name = os.path.basename(pdf_path).replace(".pdf", "")
+            logging.info(f"  PDF文件名: {pdf_file_name}")
 
             if middle_json is not None:
-                infer_result = {"middle_json": middle_json}
-                res_json_str = json.dumps(infer_result, ensure_ascii=False)
+                logging.info(f"  开始生成target_file...")
 
-                # 保存为压缩文件
-                result_dir = f"{save_dir}/result"
-                if not os.path.exists(result_dir):
-                    os.makedirs(result_dir, exist_ok=True)
-                target_file = f"{result_dir}/{pdf_file_name}.json.zip"
-                with zipfile.ZipFile(target_file, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-                    res_json_bytes = res_json_str.encode("utf-8")
-                    zf.writestr(f"{pdf_file_name}.json", res_json_bytes)
+                try:
+                    # 步骤5.1: 创建推理结果
+                    infer_result = {"middle_json": middle_json}
+                    logging.info(f"  步骤5.1 - 创建推理结果: 成功")
 
-                page_count = get_pdf_page_count(pdf_path)
-                file_size = os.path.getsize(target_file)
-                result = {
-                    'input_path': pdf_path,
-                    'output_path': target_file,
-                    'page_count': page_count,
-                    'file_size': file_size,
-                    'success': True
-                }
+                    # 步骤5.2: JSON序列化
+                    res_json_str = json.dumps(infer_result, ensure_ascii=False)
+                    json_size = len(res_json_str.encode('utf-8'))
+                    logging.info(f"  步骤5.2 - JSON序列化: 成功, 大小: {json_size} bytes")
+
+                    # 步骤5.3: 创建结果目录
+                    result_dir = f"{save_dir}/result"
+                    if not os.path.exists(result_dir):
+                        os.makedirs(result_dir, exist_ok=True)
+                        logging.info(f"  步骤5.3 - 创建结果目录: {result_dir}")
+                    else:
+                        logging.info(f"  步骤5.3 - 结果目录已存在: {result_dir}")
+
+                    # 步骤5.4: 构建target_file路径
+                    target_file = f"{result_dir}/{pdf_file_name}.json.zip"
+                    logging.info(f"  步骤5.4 - target_file路径: {target_file}")
+
+                    # 步骤5.5: ZIP压缩写入
+                    logging.info(f"  步骤5.5 - 开始ZIP压缩写入...")
+                    with zipfile.ZipFile(target_file, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+                        res_json_bytes = res_json_str.encode("utf-8")
+                        zf.writestr(f"{pdf_file_name}.json", res_json_bytes)
+                    logging.info(f"  步骤5.5 - ZIP压缩写入完成")
+
+                    # 步骤5.6: 获取文件信息
+                    page_count = get_pdf_page_count(pdf_path)
+                    file_size = os.path.getsize(target_file)
+                    logging.info(f"  步骤5.6 - 文件信息: 页数={page_count}, 文件大小={file_size} bytes")
+
+                    # 步骤5.7: 创建成功结果
+                    result = {
+                        'input_path': pdf_path,
+                        'output_path': target_file,
+                        'page_count': page_count,
+                        'file_size': file_size,
+                        'success': True
+                    }
+                    logging.info(f"  步骤5.7 - 创建成功结果: {target_file}")
+
+                except Exception as save_error:
+                    logging.error(f"  ❌ 文件保存过程中发生错误: {save_error}")
+                    import traceback
+                    logging.error(f"  详细错误堆栈:\n{traceback.format_exc()}")
+
+                    # 步骤5.8: 创建失败结果
+                    result = {
+                        'input_path': pdf_path,
+                        'output_path': None,
+                        'success': False,
+                        'save_error': str(save_error)
+                    }
+                    logging.info(f"  步骤5.8 - 创建失败结果")
             else:
+                logging.warning(f"  middle_json为None，无法保存文件")
                 result = {
                     'input_path': pdf_path,
                     'output_path': None,
-                    'success': False
+                    'success': False,
+                    'reason': 'middle_json is None'
                 }
 
-            # 保存页面结果信息
+            # 步骤5.9: 保存页面结果信息
             page_result_path = f"{save_dir}/page_result"
             if not os.path.exists(page_result_path):
                 os.makedirs(page_result_path, exist_ok=True)
+                logging.info(f"  步骤5.9 - 创建页面结果目录: {page_result_path}")
+
             json_file_name = f"{pdf_file_name}.json"
             temp_json_path = os.path.join(page_result_path, json_file_name)
-            with open(temp_json_path, 'w') as f:
-                json.dump(result, f)
+
+            try:
+                with open(temp_json_path, 'w') as f:
+                    json.dump(result, f, indent=2)
+                logging.info(f"  步骤5.9 - 保存页面结果文件: {temp_json_path}")
+            except Exception as page_save_error:
+                logging.error(f"  ❌ 保存页面结果文件失败: {page_save_error}")
+
             final_results.append(result)
+            logging.info(f"  文件 {i+1} 处理完成，成功: {result['success']}")
+
+        logging.info(f"=== 步骤5 - 文件保存详细调试结束 ===")
+        success_count = sum(1 for r in final_results if r['success'])
+        logging.info(f"文件保存统计: 成功 {success_count}/{len(final_results)} 个文件")
+
+        file_save_time = time.time() - file_save_start
+        logging.info(f"步骤5 - 文件保存 (JSON序列化、ZIP压缩写入): {file_save_time:.2f}秒")
 
         total_time = time.time() - start
         logging.info(f"GPU处理完成，总耗时{total_time:.2f}秒")
+
+        # 详细时间分析汇总
+        logging.info(f"=== GPU处理详细时间分析汇总 ===")
+        if 'data_preprocess_time' in locals():
+            logging.info(f"数据预处理 (base64→PIL转换): {data_preprocess_time:.2f}秒 ({data_preprocess_time/total_time*100:.1f}%)")
+        if 'model_init_time' in locals():
+            logging.info(f"模型初始化: {model_init_time:.2f}秒 ({model_init_time/total_time*100:.1f}%)")
+        if 'gpu_time' in locals():
+            logging.info(f"GPU推理 (纯AI模型推理): {gpu_time:.2f}秒 ({gpu_time/total_time*100:.1f}%)")
+        if 'postprocess_time' in locals():
+            logging.info(f"结果后处理 (表格合并、标题优化等): {postprocess_time:.2f}秒 ({postprocess_time/total_time*100:.1f}%)")
+        if 'file_save_time' in locals():
+            logging.info(f"文件保存 (JSON序列化、ZIP压缩写入): {file_save_time:.2f}秒 ({file_save_time/total_time*100:.1f}%)")
+
+        # 计算非推理时间
+        if 'gpu_time' in locals():
+            non_inference_time = total_time - gpu_time
+            logging.info(f"非推理时间总计: {non_inference_time:.2f}秒 ({non_inference_time/total_time*100:.1f}%)")
+            logging.info(f"时间差距分析: GPU推理 {gpu_time:.2f}秒 vs 总处理 {total_time:.2f}秒 = 差距 {non_inference_time:.2f}秒")
 
         return {
             'success': True,
@@ -414,6 +515,10 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
             'gpu_time': gpu_time if 'gpu_time' in locals() else 0,
             'total_preprocess_time': preprocessed_data.get('total_preprocess_time', 0),
             'total_time': total_time,
+            'data_preprocess_time': data_preprocess_time if 'data_preprocess_time' in locals() else 0,
+            'model_init_time': model_init_time if 'model_init_time' in locals() else 0,
+            'postprocess_time': postprocess_time if 'postprocess_time' in locals() else 0,
+            'file_save_time': file_save_time if 'file_save_time' in locals() else 0,
             'batch_info': batch
         }
 
@@ -659,8 +764,8 @@ class SimpleMinerUPool:
         # 创建基于GPU ID的进程池
         self.process_pool = SimpleProcessPool(gpu_ids=gpu_ids, workers_per_gpu=workers_per_gpu,            
             enable_preprocessing=True,
-            max_gpu_queue_size=32,
-            preprocessing_workers=16)
+            max_gpu_queue_size=8,
+            preprocessing_workers=4)
         logging.info(
             f"Created MinerU pool: {len(gpu_ids)} GPUs × {workers_per_gpu} workers = {len(gpu_ids) * workers_per_gpu} total workers")
 
