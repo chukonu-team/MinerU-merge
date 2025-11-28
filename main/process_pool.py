@@ -10,7 +10,7 @@ def _preprocessing_worker(worker_id: int, preprocessing_queue: mp.Queue,
                           gpu_task_queue: mp.Queue,
                           max_gpu_queue_size: int,
                           shutdown_event: mp.Event):
-    """单个预处理工作进程函数"""
+    """单个预处理工作进程函数 - 真实场景"""
     processed_count = 0
 
     print(f"Preprocessing worker {worker_id} started with PID {os.getpid()}")
@@ -24,9 +24,22 @@ def _preprocessing_worker(worker_id: int, preprocessing_queue: mp.Queue,
 
             task_id, func, args, kwargs = task
 
-            # 模拟预处理工作（10秒）
-            print(f"Preprocessing worker {worker_id} processing task {task_id} for 10 seconds...")
-            time.sleep(10)
+            print(f"Preprocessing worker {worker_id} processing task {task_id}...")
+
+            # 执行真实的预处理工作
+            try:
+                preprocessed_result = func(*args, **kwargs)
+                processed_count += 1
+                print(f"Preprocessing worker {worker_id} completed task {task_id}")
+            except Exception as preprocess_error:
+                print(f"Preprocessing worker {worker_id} failed task {task_id}: {preprocess_error}")
+                # 如果预处理失败，仍然将错误信息传递给GPU队列处理
+                preprocessed_result = {
+                    'success': False,
+                    'error': str(preprocess_error),
+                    'preprocessing_failed': True,
+                    'batch_info': args[0] if args else {}
+                }
 
             # 检查GPU任务队列是否已满
             while gpu_task_queue.qsize() >= max_gpu_queue_size and not shutdown_event.is_set():
@@ -37,10 +50,11 @@ def _preprocessing_worker(worker_id: int, preprocessing_queue: mp.Queue,
                 break
 
             # 将预处理后的任务放入GPU任务队列
-            preprocessed_task = (task_id, func, args, kwargs)
+            # 现在使用gpu_processing_task作为GPU函数
+            from ocr_pdf_batch import gpu_processing_task
+            preprocessed_task = (task_id, gpu_processing_task, (preprocessed_result,), kwargs)
             gpu_task_queue.put(preprocessed_task)
-            processed_count += 1
-            print(f"Preprocessing worker {worker_id} completed task {task_id}, queued for GPU processing")
+            print(f"Preprocessing worker {worker_id} queued task {task_id} for GPU processing")
 
         except Empty:
             continue

@@ -114,25 +114,171 @@ def process_batch_pdf_files(batch, save_dir, backend="vllm-engine"):
     return results
 
 
-def gpu_worker_task(batch, save_dir, **kwargs):
+def preprocessing_task(batch, save_dir, **kwargs):
     """
-    GPU工作进程的任务函数 - 简化版本
-    每个工作进程处理单个PDF文件
+    预处理函数 - 读取PDF文件并转换为字节格式
+    这部分工作不依赖GPU，可以在CPU上并行处理
     """
+    start = time.time()
+    logging.info(f"预处理批次开始: {batch.get('file_names', [])}")
 
-    backend = os.environ.get("BACKEND", "pipeline")
-    logging.info(f"backend: {backend}")
+    pdf_bytes_list = []
+    image_writers = []
+    pdf_paths = batch['files'].copy()
+
+    read_start = time.time()
+    from mineru.data.data_reader_writer import FileBasedDataWriter
+
+    # 读取PDF文件并转换为字节格式
+    for i in range(len(pdf_paths) - 1, -1, -1):
+        try:
+            pdf_bytes = read_fn(pdf_paths[i])
+            pdf_bytes = convert_pdf_bytes_to_bytes_by_pypdfium2(pdf_bytes, 0, None)
+            pdf_bytes_list.append(pdf_bytes)
+            pdf_name = os.path.basename(pdf_paths[i])
+            local_image_dir = f"/mnt/data/mineru_ocr_local_image_dir/{pdf_name}"
+            if not os.path.exists(local_image_dir):
+                os.makedirs(local_image_dir, exist_ok=True)
+            image_writer = FileBasedDataWriter(local_image_dir)
+            image_writers.append(image_writer)
+        except Exception as e:
+            logging.warning(f"加载 {pdf_paths[i]} 失败: {e}")
+            traceback.print_exc()
+            del pdf_paths[i]
+
+    preprocess_time = time.time() - read_start
+    logging.info(f"预处理加载完毕，耗时{preprocess_time:.2f}秒")
+
+    # 返回预处理后的数据，供GPU函数使用
+    return {
+        'pdf_bytes_list': pdf_bytes_list,
+        'image_writers': image_writers,
+        'pdf_paths': pdf_paths,
+        'save_dir': save_dir,
+        'preprocess_time': preprocess_time,
+        'batch_info': batch
+    }
+
+
+def gpu_processing_task(preprocessed_data, **kwargs):
+    """
+    GPU处理函数 - 使用GPU进行文档分析并保存结果
+    这部分工作需要GPU，处理预处理后的数据
+    """
+    start = time.time()
+    pdf_bytes_list = preprocessed_data['pdf_bytes_list']
+    image_writers = preprocessed_data['image_writers']
+    pdf_paths = preprocessed_data['pdf_paths']
+    save_dir = preprocessed_data['save_dir']
+    batch = preprocessed_data['batch_info']
+
+    logging.info(f"GPU处理开始: {batch.get('file_names', [])}")
+
     try:
-        # 执行PDF处理
-        process_batch_pdf_files(batch, save_dir, backend)
+        backend = os.environ.get("BACKEND", "vllm-engine")
+        logging.info(f"backend: {backend}")
+
+        # 调用batch_doc_analyze进行GPU分析
+        from mineru.backend.vlm.vlm_analyze import batch_doc_analyze
+        gpu_memory_utilization = os.environ.get("GPU_MEMORY_UTILIZATION", 0.5)
+
+        gpu_start = time.time()
+        all_middle_json, _ = batch_doc_analyze(
+            pdf_bytes_list=pdf_bytes_list,
+            image_writer_list=image_writers,
+            backend=backend,
+            server_url=None,
+            gpu_memory_utilization=gpu_memory_utilization
+        )
+        gpu_time = time.time() - gpu_start
+        logging.info(f"GPU分析完毕，耗时{gpu_time:.2f}秒")
+
+        # 保存结果
+        results = []
+        for pdf_path, middle_json in zip(pdf_paths, all_middle_json):
+            pdf_file_name = os.path.basename(pdf_path).replace(".pdf", "")
+            if middle_json is not None:
+                infer_result = {"middle_json": middle_json}
+                res_json_str = json.dumps(infer_result, ensure_ascii=False)
+
+                # 保存为压缩文件
+                result_dir = f"{save_dir}/result"
+                if not os.path.exists(result_dir):
+                    os.makedirs(result_dir, exist_ok=True)
+                target_file = f"{result_dir}/{pdf_file_name}.json.zip"
+                with zipfile.ZipFile(target_file, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+                    res_json_bytes = res_json_str.encode("utf-8")
+                    zf.writestr(f"{pdf_file_name}.json", res_json_bytes)
+
+                page_count = get_pdf_page_count(pdf_path)
+                file_size = os.path.getsize(target_file)
+                result = {
+                    'input_path': pdf_path,
+                    'output_path': target_file,
+                    'page_count': page_count,
+                    'file_size': file_size,
+                    'success': True
+                }
+            else:
+                result = {
+                    'input_path': pdf_path,
+                    'output_path': None,
+                    'success': False
+                }
+
+            # 保存页面结果信息
+            page_result_path = f"{save_dir}/page_result"
+            if not os.path.exists(page_result_path):
+                os.makedirs(page_result_path, exist_ok=True)
+            json_file_name = f"{pdf_file_name}.json"
+            temp_json_path = os.path.join(page_result_path, json_file_name)
+            with open(temp_json_path, 'w') as f:
+                json.dump(result, f)
+            results.append(result)
+
+        total_time = time.time() - start
+        logging.info(f"GPU处理完成，总耗时{total_time:.2f}秒")
+
         return {
-            'success': False,
+            'success': True,
+            'results': results,
+            'preprocess_time': preprocessed_data['preprocess_time'],
+            'gpu_time': gpu_time,
+            'total_time': total_time,
+            'batch_info': batch
         }
+
     except Exception as e:
+        error_time = time.time() - start
+        logging.error(f"GPU处理失败: {e}")
         return {
             'success': False,
             'error': str(e),
-            'traceback': traceback.format_exc()
+            'traceback': traceback.format_exc(),
+            'error_time': error_time,
+            'batch_info': batch
+        }
+
+
+def gpu_worker_task(batch, save_dir, **kwargs):
+    """
+    GPU工作进程的任务函数 - 适配双缓冲系统
+    现在这个函数调用预处理任务，预处理结果会被放入GPU队列
+    """
+
+    logging.info(f"GPU worker task 开始预处理: {batch.get('file_names', [])}")
+    try:
+        # 执行预处理任务
+        preprocessed_data = preprocessing_task(batch, save_dir, **kwargs)
+        logging.info(f"预处理完成，准备提交到GPU队列")
+        return preprocessed_data
+    except Exception as e:
+        logging.error(f"预处理失败: {e}")
+        return {
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc(),
+            'batch_info': batch
         }
 
 
