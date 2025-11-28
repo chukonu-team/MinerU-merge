@@ -155,7 +155,6 @@ def preprocessing_task_with_image_loading(batch, save_dir, **kwargs):
     from mineru.utils.enum_class import ImageType
 
     all_images_list = []
-    all_pdf_docs = []
     images_count_per_pdf = []
     pdf_processing_status = []
 
@@ -164,18 +163,24 @@ def preprocessing_task_with_image_loading(batch, save_dir, **kwargs):
         try:
             images_list, pdf_doc = load_images_from_pdf(pdf_bytes, image_type=ImageType.BASE64)
             all_images_list.extend(images_list)
-            all_pdf_docs.append(pdf_doc)
             images_count_per_pdf.append(len(images_list))
             pdf_processing_status.append(True)  # 标记为成功处理
+            # 立即关闭pdf_doc对象，避免序列化问题
+            if pdf_doc is not None:
+                try:
+                    pdf_doc.close()
+                except:
+                    pass
         except Exception as e:
             logging.warning(f"从PDF加载图像失败: {e}")
-            # 添加None作为pdf_doc，标记失败状态
-            all_pdf_docs.append(None)
             images_count_per_pdf.append(0)  # 图像数量为0
             pdf_processing_status.append(False)  # 标记为处理失败
 
     image_loading_time = time.time() - image_loading_start
     logging.info(f"图像加载完毕，耗时{image_loading_time:.2f}秒")
+
+    # 直接使用pdf_bytes，避免序列化问题
+    logging.info(f"使用pdf_bytes方式，避免pdf_doc序列化问题")
 
     # 生成有效的PIL图像列表（从base64转换回PIL格式用于GPU处理）
     images_pil_list = []
@@ -194,13 +199,7 @@ def preprocessing_task_with_image_loading(batch, save_dir, **kwargs):
     total_preprocess_time = time.time() - start
     logging.info(f"增强预处理完成，总耗时{total_preprocess_time:.2f}秒，有效图像数: {len(images_pil_list)}")
 
-    # 注意：all_images_list和images_pil_list包含PIL图像对象，不能直接序列化
-    # 在实际GPU处理中，图像会在预处理阶段保存到本地文件
-    # GPU工作进程会从文件系统读取图像数据
-
-    # 返回预处理后的数据（使用base64格式支持序列化）
-    # 保留all_images_list（包含base64图像数据），移除pdfium文档对象
-    # images_pil_list只包含在预处理阶段临时使用的PIL对象，不需要传递
+    # 返回预处理后的数据（直接使用pdf_bytes，不包含all_pdf_docs避免序列化问题）
     return {
         'pdf_bytes_list': pdf_bytes_list,
         'image_writers': image_writers,
@@ -210,7 +209,6 @@ def preprocessing_task_with_image_loading(batch, save_dir, **kwargs):
         'image_loading_time': image_loading_time,
         'total_preprocess_time': total_preprocess_time,
         'all_images_list': all_images_list,  # 包含base64图像数据，可以序列化
-        'all_pdf_docs': [None] * len(all_pdf_docs),  # 清空pdfium文档对象，避免序列化问题
         'images_count_per_pdf': images_count_per_pdf,
         'pdf_processing_status': pdf_processing_status,
         'images_pil_list': [],  # 清空PIL图像列表，避免序列化问题
@@ -274,12 +272,14 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
 
     # 从预处理数据中获取所有必要信息
     all_images_list = preprocessed_data['all_images_list']
-    all_pdf_docs = preprocessed_data['all_pdf_docs']
+    pdf_bytes_list = preprocessed_data['pdf_bytes_list']  # PDF字节数据
     images_count_per_pdf = preprocessed_data['images_count_per_pdf']
     pdf_processing_status = preprocessed_data['pdf_processing_status']
     save_dir = preprocessed_data['save_dir']
     image_writers = preprocessed_data['image_writers']
     batch = preprocessed_data['batch_info']
+
+    logging.info(f"准备处理 {len(pdf_bytes_list)} 个PDF字节数据对象")
 
     logging.info(f"GPU处理开始（基于预加载图像）: {batch.get('file_names', [])}")
 
@@ -303,7 +303,7 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
         # 如果没有有效的图像，直接返回空结果
         if not images_pil_list:
             logging.warning("没有有效的图像，返回空结果")
-            all_middle_json = [None] * len(all_pdf_docs)
+            all_middle_json = [None] * len(pdf_processing_status)
         else:
             # 步骤2: 模型初始化
             model_init_start = time.time()
@@ -331,9 +331,9 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
             all_middle_json = []
             image_idx = 0
 
-            for i, (pdf_doc, is_success) in enumerate(zip(all_pdf_docs, pdf_processing_status)):
-                logging.info(f"步骤4.1 loop index:{i} - 预处理成功: {is_success}, pdf_doc is None: {pdf_doc is None}")
-                if not is_success or pdf_doc is None:
+            for i, is_success in enumerate(pdf_processing_status):
+                logging.info(f"步骤4.1 loop index:{i} - 预处理成功: {is_success}")
+                if not is_success:
                     # 对于处理失败的PDF，返回None
                     all_middle_json.append(None)
                     continue
@@ -350,11 +350,40 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
                 current_images_list = all_images_list[image_idx: image_idx + current_pdf_images_count]
                 current_results = results[image_idx: image_idx + current_pdf_images_count]
 
-                # 为当前PDF生成middle_json
-                from mineru.backend.vlm.vlm_analyze import result_to_middle_json
-                image_writer = image_writers[i] if i < len(image_writers) else None
-                middle_json = result_to_middle_json(current_results, current_images_list, pdf_doc, image_writer)
-                all_middle_json.append(middle_json)
+                # 为当前PDF生成middle_json，使用pdf_bytes避免序列化问题
+                if i >= len(pdf_bytes_list):
+                    logging.error(f"索引超出范围: i={i}, len(pdf_bytes_list)={len(pdf_bytes_list)}")
+                    all_middle_json.append(None)
+                    continue
+
+                pdf_bytes = pdf_bytes_list[i]
+                if pdf_bytes is None:
+                    logging.error(f"PDF字节数据为空: i={i}")
+                    all_middle_json.append(None)
+                    continue
+
+                try:
+                    from mineru.backend.vlm.vlm_analyze import result_to_middle_json
+                    import pypdfium2 as pdfium
+
+                    # 直接从pdf_bytes创建pdf_doc对象
+                    pdf_doc = pdfium.PdfDocument(pdf_bytes)
+                    image_writer = image_writers[i] if i < len(image_writers) else None
+
+                    try:
+                        middle_json = result_to_middle_json(current_results, current_images_list, pdf_doc, image_writer)
+                        all_middle_json.append(middle_json)
+                        logging.info(f"成功生成middle_json for PDF {i} from bytes")
+                    finally:
+                        # 确保文档对象被正确关闭
+                        try:
+                            pdf_doc.close()
+                        except:
+                            pass
+
+                except Exception as create_doc_error:
+                    logging.error(f"从bytes创建PDF文档失败 {i}: {create_doc_error}")
+                    all_middle_json.append(None)
 
                 # 更新图像索引
                 image_idx += current_pdf_images_count
@@ -440,7 +469,6 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
 
                 except Exception as save_error:
                     logging.error(f"  ❌ 文件保存过程中发生错误: {save_error}")
-                    import traceback
                     logging.error(f"  详细错误堆栈:\n{traceback.format_exc()}")
 
                     # 步骤5.8: 创建失败结果
@@ -507,6 +535,9 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
             non_inference_time = total_time - gpu_time
             logging.info(f"非推理时间总计: {non_inference_time:.2f}秒 ({non_inference_time/total_time*100:.1f}%)")
             logging.info(f"时间差距分析: GPU推理 {gpu_time:.2f}秒 vs 总处理 {total_time:.2f}秒 = 差距 {non_inference_time:.2f}秒")
+
+        # 不再有临时文件需要清理，因为现在直接使用原始文件路径
+        logging.info(f"使用文件路径方式，无需清理临时文件")
 
         return {
             'success': True,
