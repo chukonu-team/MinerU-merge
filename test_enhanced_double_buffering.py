@@ -13,19 +13,21 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'main'))
 
 from process_pool import SimpleProcessPool
 
-def create_test_pdf_files(num_files=2):
-    """创建测试用的虚拟PDF文件"""
-    test_files = []
-    for i in range(num_files):
-        # 创建更真实的临时文件模拟PDF
-        temp_file = tempfile.NamedTemporaryFile(suffix='.pdf', delete=False)
-        # 写入一个简单的PDF文件头
-        temp_file.write(b'%PDF-1.4\n% fake pdf content for testing\n')
-        temp_file.write(b'1 0 obj\n<<\n/Type /Catalog\n/Pages 2 0 R\n>>\nendobj\n')
-        temp_file.close()
-        test_files.append(temp_file.name)
+def get_real_pdf_files():
+    """获取真实的PDF文件进行测试"""
+    demo_pdfs_dir = os.path.join(os.path.dirname(__file__), 'demo', 'pdfs')
 
-    return test_files
+    if not os.path.exists(demo_pdfs_dir):
+        print(f"错误: demo/pdfs 目录不存在: {demo_pdfs_dir}")
+        return []
+
+    # 获取所有PDF文件
+    pdf_files = []
+    for file_name in os.listdir(demo_pdfs_dir):
+        if file_name.endswith('.pdf'):
+            pdf_files.append(os.path.join(demo_pdfs_dir, file_name))
+
+    return pdf_files
 
 def cleanup_test_files(files):
     """清理测试文件"""
@@ -38,9 +40,11 @@ def cleanup_test_files(files):
 def main():
     print("=== 测试增强版双缓冲队列系统（包含图像加载预处理）===")
 
-    # 创建测试PDF文件
-    test_pdf_files = create_test_pdf_files(2)
-    print(f"创建了 {len(test_pdf_files)} 个测试PDF文件")
+    # 获取真实的PDF文件
+    test_pdf_files = get_real_pdf_files()
+    print(f"找到 {len(test_pdf_files)} 个真实PDF文件:")
+    for file_path in test_pdf_files:
+        print(f"  - {os.path.basename(file_path)}")
 
     # 创建临时输出目录
     temp_output_dir = tempfile.mkdtemp(prefix="mineru_enhanced_test_")
@@ -65,7 +69,7 @@ def main():
         test_batch = {
             'files': test_pdf_files,
             'file_names': [os.path.basename(f) for f in test_pdf_files],
-            'total_pages': len(test_pdf_files) * 3  # 假设每个文件3页
+            'total_pages': None  # 让系统自动检测页数
         }
 
         print(f"\n提交测试批次: {test_batch['file_names']}")
@@ -127,13 +131,10 @@ def main():
         pool.shutdown()
         print("进程池已关闭")
 
-        # 清理测试文件和目录
-        cleanup_test_files(test_pdf_files)
-
-        # 清理输出目录
+        # 不清理真实PDF文件，只清理输出目录
         import shutil
         shutil.rmtree(temp_output_dir, ignore_errors=True)
-        print("临时文件已清理")
+        print("临时输出目录已清理")
 
 if __name__ == "__main__":
     main()

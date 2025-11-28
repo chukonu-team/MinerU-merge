@@ -152,16 +152,17 @@ def preprocessing_task_with_image_loading(batch, save_dir, **kwargs):
     # 加载图像（这部分原在batch_doc_analyze中）
     image_loading_start = time.time()
     from mineru.backend.vlm.vlm_analyze import load_images_from_pdf
+    from mineru.utils.enum_class import ImageType
 
     all_images_list = []
     all_pdf_docs = []
     images_count_per_pdf = []
     pdf_processing_status = []
 
-    # 遍历所有PDF文档，加载图像
+    # 遍历所有PDF文档，加载图像（使用BASE64格式以支持序列化）
     for pdf_bytes in pdf_bytes_list:
         try:
-            images_list, pdf_doc = load_images_from_pdf(pdf_bytes, image_type=ImageType.PIL)
+            images_list, pdf_doc = load_images_from_pdf(pdf_bytes, image_type=ImageType.BASE64)
             all_images_list.extend(images_list)
             all_pdf_docs.append(pdf_doc)
             images_count_per_pdf.append(len(images_list))
@@ -176,16 +177,30 @@ def preprocessing_task_with_image_loading(batch, save_dir, **kwargs):
     image_loading_time = time.time() - image_loading_start
     logging.info(f"图像加载完毕，耗时{image_loading_time:.2f}秒")
 
-    # 生成有效的PIL图像列表
+    # 生成有效的PIL图像列表（从base64转换回PIL格式用于GPU处理）
     images_pil_list = []
     for image_dict in all_images_list:
-        if image_dict and isinstance(image_dict, dict) and "img_pil" in image_dict:
-            images_pil_list.append(image_dict["img_pil"])
+        if image_dict and isinstance(image_dict, dict) and "img_base64" in image_dict:
+            # 将base64字符串转换回PIL图像
+            try:
+                from mineru.utils.pdf_reader import base64_to_pil_image
+                pil_img = base64_to_pil_image(image_dict["img_base64"])
+                # 将PIL图像存储回字典中以保持兼容性
+                image_dict["img_pil"] = pil_img
+                images_pil_list.append(pil_img)
+            except Exception as e:
+                logging.warning(f"转换base64图像到PIL失败: {e}")
 
     total_preprocess_time = time.time() - start
     logging.info(f"增强预处理完成，总耗时{total_preprocess_time:.2f}秒，有效图像数: {len(images_pil_list)}")
 
-    # 返回预处理后的数据，供GPU函数使用
+    # 注意：all_images_list和images_pil_list包含PIL图像对象，不能直接序列化
+    # 在实际GPU处理中，图像会在预处理阶段保存到本地文件
+    # GPU工作进程会从文件系统读取图像数据
+
+    # 返回预处理后的数据（使用base64格式支持序列化）
+    # 保留all_images_list（包含base64图像数据），移除pdfium文档对象
+    # images_pil_list只包含在预处理阶段临时使用的PIL对象，不需要传递
     return {
         'pdf_bytes_list': pdf_bytes_list,
         'image_writers': image_writers,
@@ -194,11 +209,11 @@ def preprocessing_task_with_image_loading(batch, save_dir, **kwargs):
         'preprocess_time': preprocess_time,
         'image_loading_time': image_loading_time,
         'total_preprocess_time': total_preprocess_time,
-        'all_images_list': all_images_list,
-        'all_pdf_docs': all_pdf_docs,
+        'all_images_list': all_images_list,  # 包含base64图像数据，可以序列化
+        'all_pdf_docs': [None] * len(all_pdf_docs),  # 清空pdfium文档对象，避免序列化问题
         'images_count_per_pdf': images_count_per_pdf,
         'pdf_processing_status': pdf_processing_status,
-        'images_pil_list': images_pil_list,
+        'images_pil_list': [],  # 清空PIL图像列表，避免序列化问题
         'batch_info': batch
     }
 
@@ -261,12 +276,23 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
     all_pdf_docs = preprocessed_data['all_pdf_docs']
     images_count_per_pdf = preprocessed_data['images_count_per_pdf']
     pdf_processing_status = preprocessed_data['pdf_processing_status']
-    images_pil_list = preprocessed_data['images_pil_list']
     save_dir = preprocessed_data['save_dir']
     image_writers = preprocessed_data['image_writers']
     batch = preprocessed_data['batch_info']
 
     logging.info(f"GPU处理开始（基于预加载图像）: {batch.get('file_names', [])}")
+
+    # 从base64图像数据重建PIL图像列表
+    images_pil_list = []
+    for image_dict in all_images_list:
+        if image_dict and isinstance(image_dict, dict) and "img_base64" in image_dict:
+            # 将base64字符串转换回PIL图像
+            try:
+                from mineru.utils.pdf_reader import base64_to_pil_image
+                pil_img = base64_to_pil_image(image_dict["img_base64"])
+                images_pil_list.append(pil_img)
+            except Exception as e:
+                logging.warning(f"转换base64图像到PIL失败: {e}")
 
     try:
         # 如果没有有效的图像，直接返回空结果
@@ -278,8 +304,13 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
             backend = os.environ.get("BACKEND", "vllm-engine")
             logging.info(f"backend: {backend}")
 
+            # 过滤掉不支持的参数，只传递有效的GPU配置
+            filtered_kwargs = kwargs.copy()
+            if 'gpu_id' in filtered_kwargs:
+                del filtered_kwargs['gpu_id']  # vLLM不支持gpu_id参数
+
             from mineru.backend.vlm.vlm_analyze import ModelSingleton
-            predictor = ModelSingleton().get_model(backend, None, None, **kwargs)
+            predictor = ModelSingleton().get_model(backend, None, None, **filtered_kwargs)
 
             # GPU推理 - 只调用batch_two_step_extract
             gpu_start = time.time()
