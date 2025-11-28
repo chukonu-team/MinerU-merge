@@ -3,7 +3,78 @@ import time
 import os
 from typing import Dict, Any, Callable, Optional
 from dataclasses import dataclass
-from queue import Empty
+from queue import Empty, Full
+
+
+def _preprocessing_worker(worker_id: int, preprocessing_queue: mp.Queue,
+                          gpu_task_queue: mp.Queue,
+                          max_gpu_queue_size: int,
+                          shutdown_event: mp.Event):
+    """单个预处理工作进程函数"""
+    processed_count = 0
+
+    print(f"Preprocessing worker {worker_id} started with PID {os.getpid()}")
+
+    while not shutdown_event.is_set():
+        try:
+            # 从预处理队列获取原始任务
+            task = preprocessing_queue.get(timeout=1.0)
+            if task is None:
+                break
+
+            task_id, func, args, kwargs = task
+
+            # 模拟预处理工作（10秒）
+            print(f"Preprocessing worker {worker_id} processing task {task_id} for 10 seconds...")
+            time.sleep(10)
+
+            # 检查GPU任务队列是否已满
+            while gpu_task_queue.qsize() >= max_gpu_queue_size and not shutdown_event.is_set():
+                print(f"Preprocessing worker {worker_id}: GPU task queue is full ({gpu_task_queue.qsize()}/{max_gpu_queue_size}), waiting...")
+                time.sleep(1)
+
+            if shutdown_event.is_set():
+                break
+
+            # 将预处理后的任务放入GPU任务队列
+            preprocessed_task = (task_id, func, args, kwargs)
+            gpu_task_queue.put(preprocessed_task)
+            processed_count += 1
+            print(f"Preprocessing worker {worker_id} completed task {task_id}, queued for GPU processing")
+
+        except Empty:
+            continue
+        except Exception as e:
+            print(f"Preprocessing worker {worker_id} error: {e}")
+            break
+
+    print(f"Preprocessing worker {worker_id} exiting, processed {processed_count} tasks")
+
+
+def _preprocessing_process_manager(num_workers: int, preprocessing_queue: mp.Queue,
+                                 gpu_task_queue: mp.Queue,
+                                 max_gpu_queue_size: int,
+                                 shutdown_event: mp.Event):
+    """预处理进程管理器 - 启动多个预处理工作进程"""
+    workers = []
+
+    print(f"Starting preprocessing process manager with {num_workers} workers")
+
+    # 启动多个预处理工作进程
+    for i in range(num_workers):
+        worker = mp.Process(
+            target=_preprocessing_worker,
+            args=(i, preprocessing_queue, gpu_task_queue, max_gpu_queue_size, shutdown_event)
+        )
+        worker.start()
+        workers.append(worker)
+        print(f"Started preprocessing worker {i} with PID {worker.pid}")
+
+    # 等待所有工作进程完成
+    for worker in workers:
+        worker.join()
+
+    print("All preprocessing workers have completed")
 
 
 @dataclass
@@ -66,9 +137,11 @@ def _worker_process(worker_id: int, gpu_id: int, task_queue: mp.Queue,
 
 
 class SimpleProcessPool:
-    """简化进程池类"""
+    """简化进程池类 - 支持双缓冲队列"""
 
-    def __init__(self, gpu_ids: list = None, workers_per_gpu: int = 2):
+    def __init__(self, gpu_ids: list = None, workers_per_gpu: int = 2,
+                 enable_preprocessing: bool = True, max_gpu_queue_size: int = 100,
+                 preprocessing_workers: int = 4):
         if gpu_ids is None:
             gpu_ids = [0]
 
@@ -77,9 +150,30 @@ class SimpleProcessPool:
         self.max_workers = len(gpu_ids) * workers_per_gpu
         self.workers: Dict[int, WorkerInfo] = {}
         self.next_worker_id = 0
-        self.task_queue = mp.Queue()
+
+        # 双缓冲队列系统
+        self.enable_preprocessing = enable_preprocessing
+        self.max_gpu_queue_size = max_gpu_queue_size
+        self.preprocessing_workers = preprocessing_workers
+
+        # 原始任务队列（用于预处理）
+        self.preprocessing_queue = mp.Queue()
+        # GPU任务队列（预处理后的任务）
+        self.gpu_task_queue = mp.Queue()
+
         self.result_queue = mp.Queue()
         self.shutdown_event = mp.Event()
+        self.preprocessing_manager: Optional[mp.Process] = None
+
+        # 启动多进程预处理管理器
+        if self.enable_preprocessing:
+            self.preprocessing_manager = mp.Process(
+                target=_preprocessing_process_manager,
+                args=(self.preprocessing_workers, self.preprocessing_queue,
+                      self.gpu_task_queue, self.max_gpu_queue_size, self.shutdown_event)
+            )
+            self.preprocessing_manager.start()
+            print(f"Started preprocessing manager with {preprocessing_workers} workers, PID {self.preprocessing_manager.pid}")
 
         for gpu_id in self.gpu_ids:
             for _ in range(self.workers_per_gpu):
@@ -92,9 +186,12 @@ class SimpleProcessPool:
         worker_id = self.next_worker_id
         self.next_worker_id += 1
 
+        # 根据是否启用预处理选择队列
+        task_queue_for_worker = self.gpu_task_queue if self.enable_preprocessing else self.preprocessing_queue
+
         process = mp.Process(
             target=_worker_process,
-            args=(worker_id, gpu_id, self.task_queue, self.result_queue, self.shutdown_event)
+            args=(worker_id, gpu_id, task_queue_for_worker, self.result_queue, self.shutdown_event)
         )
 
         worker_info = WorkerInfo(
@@ -113,7 +210,15 @@ class SimpleProcessPool:
     def submit_task(self, func: Callable, *args, **kwargs) -> int:
         task_id = int(time.time() * 1000000)
         task = (task_id, func, args, kwargs)
-        self.task_queue.put(task)
+
+        # 根据是否启用预处理选择提交队列
+        if self.enable_preprocessing:
+            self.preprocessing_queue.put(task)
+            print(f"Submitted task {task_id} to preprocessing queue")
+        else:
+            self.gpu_task_queue.put(task)
+            print(f"Submitted task {task_id} directly to GPU task queue")
+
         return task_id
 
     def get_result(self, timeout: float = None) -> Optional[tuple]:
@@ -123,14 +228,31 @@ class SimpleProcessPool:
             return None
 
     def is_task_queue_empty(self) -> bool:
-        return self.task_queue.empty()
+        if self.enable_preprocessing:
+            return self.preprocessing_queue.empty() and self.gpu_task_queue.empty()
+        else:
+            return self.gpu_task_queue.empty()
 
     def get_queue_size(self) -> int:
-        return self.task_queue.qsize()
+        if self.enable_preprocessing:
+            return self.preprocessing_queue.qsize() + self.gpu_task_queue.qsize()
+        else:
+            return self.gpu_task_queue.qsize()
+
+    def get_preprocessing_queue_size(self) -> int:
+        """获取预处理队列大小"""
+        if self.enable_preprocessing:
+            return self.preprocessing_queue.qsize()
+        return 0
+
+    def get_gpu_queue_size(self) -> int:
+        """获取GPU任务队列大小"""
+        return self.gpu_task_queue.qsize()
 
     def set_complete_signal(self):
+        task_queue_for_signal = self.gpu_task_queue if self.enable_preprocessing else self.preprocessing_queue
         for _ in range(len(self.workers)):
-            self.task_queue.put(None)
+            task_queue_for_signal.put(None)
 
     def all_tasks_completed(self) -> bool:
         return self.is_task_queue_empty() and len(self.workers) == 0
@@ -139,8 +261,25 @@ class SimpleProcessPool:
         print("Shutting down process pool...")
         self.shutdown_event.set()
 
+        # 关闭多进程预处理管理器
+        if self.enable_preprocessing and self.preprocessing_manager:
+            print("Shutting down preprocessing manager...")
+            # 为每个预处理工作进程发送停止信号
+            for _ in range(self.preprocessing_workers):
+                self.preprocessing_queue.put(None)
+
+            self.preprocessing_manager.join(timeout=10.0)
+            if self.preprocessing_manager.is_alive():
+                self.preprocessing_manager.terminate()
+                self.preprocessing_manager.join(timeout=5.0)
+                if self.preprocessing_manager.is_alive():
+                    self.preprocessing_manager.kill()
+                    self.preprocessing_manager.join()
+
+        # 关闭工作进程
+        task_queue_for_shutdown = self.gpu_task_queue if self.enable_preprocessing else self.preprocessing_queue
         for _ in range(len(self.workers)):
-            self.task_queue.put(None)
+            task_queue_for_shutdown.put(None)
 
         dead_workers = []
         start_time = time.time()
