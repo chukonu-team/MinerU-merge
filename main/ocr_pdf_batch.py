@@ -657,7 +657,10 @@ class SimpleMinerUPool:
             logging.info(f"Set batch size to: {batch_size}")
 
         # 创建基于GPU ID的进程池
-        self.process_pool = SimpleProcessPool(gpu_ids=gpu_ids, workers_per_gpu=workers_per_gpu)
+        self.process_pool = SimpleProcessPool(gpu_ids=gpu_ids, workers_per_gpu=workers_per_gpu,            
+            enable_preprocessing=True,
+            max_gpu_queue_size=32,
+            preprocessing_workers=16)
         logging.info(
             f"Created MinerU pool: {len(gpu_ids)} GPUs × {workers_per_gpu} workers = {len(gpu_ids) * workers_per_gpu} total workers")
 
