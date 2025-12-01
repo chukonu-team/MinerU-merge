@@ -2,7 +2,7 @@
 
 ## 系统概述
 
-MinerU PDF处理系统是一个基于多进程和多GPU的高性能PDF文档分析和处理平台。系统采用双缓冲队列架构，实现了CPU预处理和GPU推理的并行处理，支持大规模PDF文档的批量处理。
+MinerU PDF处理系统是一个基于多进程和多GPU的高性能PDF文档分析和处理平台。系统采用三级队列架构（预处理CPU → GPU推理 → 后处理CPU），实现了CPU预处理、GPU推理和CPU后处理的并行流水线，支持大规模PDF文档的批量处理。
 
 ## 整体架构图
 
@@ -26,11 +26,13 @@ graph TB
     end
 
     subgraph "进程池层 process_pool.py"
-        TaskSubmitter --> PreprocessingQueue[预处理队列]
+        TaskSubmitter --> PreprocessingQueue[预处理CPU队列]
         PreprocessingQueue --> PreprocessingWorkers[预处理工作进程]
-        PreprocessingWorkers --> GPUQueue[GPU任务队列]
+        PreprocessingWorkers --> GPUQueue[GPU推理队列]
         GPUQueue --> GPUWorkers[GPU工作进程]
-        GPUWorkers --> ResultQueue[结果队列]
+        GPUWorkers --> PostprocessingQueue[后处理CPU队列]
+        PostprocessingQueue --> PostprocessingWorkers[后处理工作进程]
+        PostprocessingWorkers --> ResultQueue[最终结果队列]
     end
 
     subgraph "输出层"
@@ -42,6 +44,7 @@ graph TB
 
     style PreprocessingQueue fill:#e1f5fe
     style GPUQueue fill:#f3e5f5
+    style PostprocessingQueue fill:#fff3e0
     style ResultQueue fill:#e8f5e8
 ```
 
@@ -52,25 +55,31 @@ sequenceDiagram
     participant Main as main.py
     participant MinerUPool as SimpleMinerUPool
     participant ProcPool as ProcessPool
-    participant PreWorker as Preprocessing Worker
-    participant GPUWorker as GPU Worker
+    participant PreWorker as 预处理CPU工作进程
+    participant GPUWorker as GPU推理工作进程
+    participant PostWorker as 后处理CPU工作进程
     participant Storage as 文件系统
 
     Main->>MinerUPool: process_pdf_files(pdf_list, output_dir)
     MinerUPool->>ProcPool: submit_task(gpu_worker_task, batch_data)
 
     par 并行预处理
-        ProcPool->>PreWorker: 预处理队列任务
+        ProcPool->>PreWorker: 预处理CPU队列任务
         PreWorker->>PreWorker: 读取PDF文件
         PreWorker->>PreWorker: 转换PDF字节
         PreWorker->>PreWorker: 加载图像(Base64)
-        PreWorker->>ProcPool: 提交到GPU队列
-    and 并行GPU处理
-        ProcPool->>GPUWorker: GPU队列任务
-        GPUWorker->>GPUWorker: 模型推理
-        GPUWorker->>GPUWorker: 生成middle_json
-        GPUWorker->>Storage: 保存压缩结果
-        GPUWorker->>ProcPool: 返回处理结果
+        PreWorker->>ProcPool: 提交到GPU推理队列
+    and 并行GPU推理
+        ProcPool->>GPUWorker: GPU推理队列任务
+        GPUWorker->>GPUWorker: GPU模型推理(batch_two_step_extract)
+        GPUWorker->>ProcPool: 提交到后处理CPU队列
+    and 并行后处理
+        ProcPool->>PostWorker: 后处理CPU队列任务
+        PostWorker->>PostWorker: result_to_middle_json
+        PostWorker->>PostWorker: JSON序列化
+        PostWorker->>PostWorker: ZIP压缩写入
+        PostWorker->>Storage: 保存压缩结果
+        PostWorker->>ProcPool: 返回最终处理结果
     end
 
     ProcPool->>MinerUPool: get_result()
@@ -79,26 +88,30 @@ sequenceDiagram
 
 ## 核心组件架构
 
-### 1. 双缓冲队列系统
+### 1. 三级队列系统
 
 ```mermaid
 graph LR
-    subgraph "双缓冲架构"
-        A[原始任务] --> B[预处理队列]
+    subgraph "三级队列架构"
+        A[原始任务] --> B[预处理CPU队列]
         B --> C[CPU预处理]
-        C --> D[GPU任务队列]
+        C --> D[GPU推理队列]
         D --> E[GPU推理处理]
-        E --> F[结果队列]
+        E --> F[后处理CPU队列]
+        F --> G[CPU后处理]
+        G --> H[最终结果队列]
 
         style B fill:#ffcdd2
         style D fill:#c5e1a5
-        style F fill:#bbdefb
+        style F fill:#ffe0b2
+        style H fill:#bbdefb
     end
 
     subgraph "流控机制"
-        G[max_gpu_queue_size<br/>控制内存使用]
-        H[preprocessing_workers<br/>CPU并行度]
-        I[gpu_workers<br/>GPU并行度]
+        G1[max_gpu_queue_size<br/>控制内存使用]
+        H1[preprocessing_workers<br/>CPU预处理并行度]
+        I1[gpu_workers<br/>GPU推理并行度]
+        J1[postprocessing_workers<br/>CPU后处理并行度]
     end
 ```
 
@@ -106,24 +119,31 @@ graph LR
 
 ```mermaid
 graph TB
-    subgraph "SimpleProcessPool"
+    subgraph "SimpleProcessPool - 三级队列"
         PM[进程管理器]
 
         subgraph "预处理层"
-            PQ[预处理队列]
+            PQ[预处理CPU队列]
             PW1[预处理工作进程1]
             PW2[预处理工作进程2]
             PW3[预处理工作进程...]
         end
 
-        subgraph "GPU处理层"
-            GQ[GPU任务队列]
-            GW1[GPU工作进程1]
-            GW2[GPU工作进程2]
-            GW3[GPU工作进程...]
+        subgraph "GPU推理层"
+            GQ[GPU推理队列]
+            GW1[GPU推理工作进程1]
+            GW2[GPU推理工作进程2]
+            GW3[GPU推理工作进程...]
         end
 
-        RQ[结果队列]
+        subgraph "后处理层"
+            PPQ[后处理CPU队列]
+            PPW1[后处理工作进程1]
+            PPW2[后处理工作进程2]
+            PPW3[后处理工作进程...]
+        end
+
+        RQ[最终结果队列]
         SE[关闭事件]
 
         PM --> PQ
@@ -136,9 +156,15 @@ graph TB
         GQ --> GW1
         GQ --> GW2
         GQ --> GW3
-        GW1 --> RQ
-        GW2 --> RQ
-        GW3 --> RQ
+        GW1 --> PPQ
+        GW2 --> PPQ
+        GW3 --> PPQ
+        PPQ --> PPW1
+        PPQ --> PPW2
+        PPQ --> PPW3
+        PPW1 --> RQ
+        PPW2 --> RQ
+        PPW3 --> RQ
         PM --> SE
     end
 ```
@@ -154,11 +180,16 @@ flowchart TD
 
     PDFBytes --> ImageLoad[加载PDF页面图像]
     ImageLoad --> Base64[转换为Base64格式]
-    Base64 --> PreprocessResult[预处理完成]
+    Base64 --> PreprocessResult[预处理CPU完成]
 
-    PreprocessResult --> GPUModel[GPU模型推理]
-    GPUModel --> MiddleJSON[生成middle_json]
-    MiddleJSON --> Compress[压缩为ZIP]
+    PreprocessResult --> GPUPreprocess[GPU数据预处理]
+    GPUPreprocess --> GPUInference[GPU模型推理<br/>batch_two_step_extract]
+    GPUInference --> GPUResults[GPU推理结果]
+
+    GPUResults --> PostprocessStart[后处理CPU开始]
+    PostprocessStart --> MiddleJSON[result_to_middle_json]
+    MiddleJSON --> JSONSerialize[JSON序列化]
+    JSONSerialize --> Compress[压缩为ZIP]
     Compress --> SaveResult[保存结果文件]
 
     Skip --> NextBatch{下一批次?}
@@ -168,7 +199,9 @@ flowchart TD
 
     style Start fill:#4caf50,color:#fff
     style End fill:#f44336,color:#fff
-    style GPUModel fill:#2196f3,color:#fff
+    style GPUPreprocess fill:#e1f5fe,color:#fff
+    style GPUInference fill:#f3e5f5,color:#fff
+    style PostprocessStart fill:#fff3e0,color:#fff
 ```
 
 ## 文件结构映射
