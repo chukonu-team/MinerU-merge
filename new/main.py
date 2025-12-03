@@ -27,7 +27,8 @@ def preprocess_worker(pdf_path):
         pdf_bytes = convert_pdf_bytes_to_bytes_by_pypdfium2(pdf_bytes, 0, None)
         pdf_name = os.path.basename(pdf_path)
         page_count = get_pdf_page_count(pdf_path)
-        images_byte_list, pdf_doc = load_images_from_pdf(pdf_bytes, image_type=ImageType.BYTES,threads=4)
+        # 移除threads参数以避免在守护进程中创建子线程
+        images_byte_list, _ = load_images_from_pdf(pdf_bytes, image_type=ImageType.BYTES)
         return {
             "success":True,
             "pdf_bytes":pdf_bytes,
@@ -38,8 +39,9 @@ def preprocess_worker(pdf_path):
     except Exception as e:
         return {
             "success":False,
-            "error_msg":e
+            "error_msg":str(e)  # 转换为字符串以确保能被序列化
         }
+
 
 
 
