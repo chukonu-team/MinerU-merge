@@ -65,7 +65,7 @@ def process_pdf_files(pdf_dir):
 
     print(f"在 {pdf_dir} 中找到 {len(pdf_files)} 个PDF文件:")
     for i, pdf_file in enumerate(pdf_files, 1):
-        print(f"  {i}. {pdf_file}")
+        result=preprocess_worker(pdf_file)
 
     return pdf_files
 
