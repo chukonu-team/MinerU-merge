@@ -315,7 +315,8 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
                 del filtered_kwargs['gpu_id']  # vLLM不支持gpu_id参数
 
             from mineru.backend.vlm.vlm_analyze import ModelSingleton
-            predictor = ModelSingleton().get_model(backend, None, None, **filtered_kwargs)
+            gpu_memory_utilization = os.environ.get("GPU_MEMORY_UTILIZATION", 0.5)
+            predictor = ModelSingleton().get_model(backend, None, None, gpu_memory_utilization=gpu_memory_utilization, **filtered_kwargs)
             model_init_time = time.time() - model_init_start
             logging.info(f"步骤2 - 模型初始化: {model_init_time:.2f}秒")
 
