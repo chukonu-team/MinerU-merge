@@ -4,9 +4,23 @@ import shutil
 import sys
 import time
 from typing import List
+import zipfile
 
 # 现在导入原始脚本
 from s3_util import download_from_s3
+
+def load_processed_zip_records(record_file):
+    """加载已经处理过的zip文件列表"""
+    if not os.path.exists(record_file):
+        return set()
+
+    with open(record_file, "r") as f:
+        return set(line.strip() for line in f.readlines())
+
+def save_processed_zip_record(record_file, zip_name):
+    """写入一个已经处理过的zip名称（不需要全局锁，因为每个 bucket 独占目录）"""
+    with open(record_file, "a") as f:
+        f.write(zip_name + "\n")
 
 def get_keys_from_txt(bucket_name , key_path) -> List[str]:
     """从S3的TXT文件中获取所有PDF对象的key"""
@@ -25,7 +39,7 @@ def get_keys_from_txt(bucket_name , key_path) -> List[str]:
                     key = key.split(f"{bucket_name}/", 1)[1]
 
             # 确保键以.pdf结尾
-            if key and key.lower().endswith('.pdf'):
+            if key and key.lower().endswith('.pdf') or key.lower().endswith('.zip'):
                 keys.append(key)
             else:
                 print(f"Skipping non-PDF key: {key}")
@@ -37,6 +51,30 @@ def get_keys_from_txt(bucket_name , key_path) -> List[str]:
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+def extract_pdfs_from_zip(zip_path, output_dir):
+    """解压zip并提取其中的所有PDF文件到 output_dir，支持多级目录"""
+    temp_extract_dir = zip_path + "_unzipped"
+
+    try:
+        with zipfile.ZipFile(zip_path, "r") as z:
+            z.extractall(temp_extract_dir)
+
+        # 遍历解压目录，找到所有pdf
+        for root, _, files in os.walk(temp_extract_dir):
+            for f in files:
+                if f.lower().endswith(".pdf"):
+                    src = os.path.join(root, f)
+                    dst = os.path.join(output_dir, f)
+
+                    shutil.move(src, dst)
+                    print(f"Extracted PDF: {dst}")
+
+    except Exception as e:
+        print(f"Error extracting zip: {zip_path}: {e}")
+
+    finally:
+        if os.path.exists(temp_extract_dir):
+            shutil.rmtree(temp_extract_dir)
 
 def process_bucket(
         bucket_index,
@@ -53,14 +91,21 @@ def process_bucket(
     if not os.path.exists(pdf_dir):
         os.makedirs(pdf_dir)
 
+    record_file = os.path.join(pdf_dir, "processed_zip.txt")
+    processed_zip = load_processed_zip_records(record_file)
+
     # 准备下载任务
     def download_file(key,pdf_path):
         """单个文件下载任务"""
         # 构建预期的结果文件路径
         filename = os.path.basename(key)
+        # 如果 zip 已处理 → 直接跳过
+        if filename.lower().endswith(".zip") and filename in processed_zip:
+            print(f"Skipping already processed ZIP: {filename}")
+            return None
         # 检查结果是否已存在
         local_path = os.path.join(pdf_path, filename)
-        if os.path.exists(local_path):
+        if os.path.exists(local_path) and not local_path.lower().endswith(".zip"):
             print(f"Skipping already processed file: {filename}")
             return None
         try:
@@ -84,6 +129,22 @@ def process_bucket(
     if not downloaded_files:
         print(f"Batch {bucket_index} skipped - all files already processed")
 
+    final_pdfs = []
+    for file_path in downloaded_files:
+        filename = os.path.basename(file_path)
+        if file_path.lower().endswith(".zip"):
+            print(f"Unzipping zip file: {file_path}")
+            extract_pdfs_from_zip(file_path, pdf_dir)
+            os.remove(file_path)  # 可选，删除 zip 文件
+            save_processed_zip_record(record_file, filename)
+        elif file_path.lower().endswith(".pdf"):
+            final_pdfs.append(file_path)
+
+    if not final_pdfs:
+        print(f"Batch {bucket_index} skipped - no PDF files found")
+        return
+
+    print(f"Batch {bucket_index} processed {len(final_pdfs)} PDF files")
 
 if __name__ == "__main__":
     # 从环境变量获取作业索引

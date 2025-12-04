@@ -25,6 +25,7 @@ def has_files(directory):
 
     for item in os.listdir(directory):
         item_path = os.path.join(directory, item)
-        if os.path.isfile(item_path):
+        if (os.path.isfile(item_path) and
+                (item_path.lower().endswith('.pdf') or item_path.lower().endswith('.json.zip') or item_path.lower().endswith('.json'))):
             return True
     return False

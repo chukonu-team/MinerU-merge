@@ -75,7 +75,7 @@ def process_batch_pdf_files(batch, save_dir, backend="vllm-engine"):
     )
     results = []
     for pdf_path, middle_json in zip(pdf_paths, all_middle_json):
-        pdf_file_name = os.path.basename(pdf_path).replace(".pdf", "")
+        pdf_file_name = os.path.basename(pdf_path).replace(".pdf", "").replace(".PDF", "")
         if middle_json is not None:
             infer_result = {"middle_json": middle_json}
             res_json_str = json.dumps(infer_result, ensure_ascii=False)
@@ -154,7 +154,7 @@ def create_batches_by_pages(pdf_files, batch_size, output_path, max_pages_per_pd
 
         if page_count > max_pages_per_pdf:
             continue
-        pdf_file_name = os.path.basename(pdf_file).replace(".pdf", "")
+        pdf_file_name = os.path.basename(pdf_file).replace(".pdf", "").replace(".PDF", "")
         # #分页时提前记录结果文件页数
         #
         # target_file = f"{output_path}/{pdf_file_name}.json.zip"
@@ -247,6 +247,7 @@ class SimpleMinerUPool:
 
     def process_pdf_files(self, pdf_files: List[str], output_dir: str) -> List[Dict]:
         """处理PDF文件列表 - 简化版本"""
+        global pdf_name
         logging.info(f"Processing {len(pdf_files)} PDF files using {len(self.gpu_ids)} GPUs...")
 
         # 确保输出目录存在
@@ -255,7 +256,7 @@ class SimpleMinerUPool:
         # 过滤已处理的文件
         files_to_process = []
         for pdf_path in pdf_files:
-            pdf_name = os.path.basename(pdf_path).replace(".pdf", "")
+            pdf_name = os.path.basename(pdf_path).replace(".pdf", "").replace(".PDF", "")
             target_file = f"{output_dir}/result/{pdf_name}.json.zip"
             if os.path.exists(target_file):
                 logging.info(f"Already processed: {pdf_path} -> {target_file}")
@@ -349,6 +350,7 @@ def process_pdfs(input_dir, output_dir, gpu_ids='0,1,2,3,4,5,6,7', workers_per_g
 
     # 获取PDF文件
     pdf_files = glob.glob(f"{input_dir}/*.pdf")
+    pdf_files.extend(glob.glob(f"{input_dir}/*.PDF"))
     logging.info(f"Found {len(pdf_files)} PDF files")
     logging.info(f"Using GPUs: {gpu_ids}")
     logging.info(f"Workers per GPU: {workers_per_gpu}")
