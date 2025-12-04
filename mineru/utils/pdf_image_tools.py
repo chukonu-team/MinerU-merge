@@ -19,25 +19,21 @@ from concurrent.futures import ProcessPoolExecutor, TimeoutError as FuturesTimeo
 
 
 def pdf_page_to_image(page: pdfium.PdfPage, dpi=200, image_type=ImageType.PIL) -> dict:
-    """Convert pdfium.PdfDocument to image, Then convert the image to base64.
-
-    Args:
-        page (_type_): pdfium.PdfPage
-        dpi (int, optional): reset the dpi of dpi. Defaults to 200.
-        image_type (ImageType, optional): The type of image to return. Defaults to ImageType.PIL.
-
-    Returns:
-        dict:  {'img_base64': str, 'img_pil': pil_img, 'scale': float }
-    """
+    """Convert pdfium.PdfPage to image in specified format."""
     pil_img, scale = page_to_image(page, dpi=dpi)
-    image_dict = {
-        "scale": scale,
-    }
+    image_dict = {"scale": scale}
+    
     if image_type == ImageType.BASE64:
         image_dict["img_base64"] = image_to_b64str(pil_img)
-    else:
+    elif image_type == ImageType.BYTES:
+        # 添加 bytes 支持 - 使用 PNG 格式保持透明度和质量
+        from mineru.utils.pdf_reader import image_to_bytes
+        img_bytes = image_to_bytes(pil_img, image_format="PNG")
+        image_dict["img_bytes"] = img_bytes
+        image_dict["format"] = "PNG"  # 可选：记录格式信息
+    else:  # ImageType.PIL
         image_dict["img_pil"] = pil_img
-
+    
     return image_dict
 
 

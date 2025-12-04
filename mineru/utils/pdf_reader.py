@@ -48,6 +48,9 @@ def image_to_b64str(
     image_bytes = image_to_bytes(image, image_format)
     return base64.b64encode(image_bytes).decode("utf-8")
 
+def bytes_to_pil(img_bytes, format="PNG"):
+    """将 bytes 转换回 PIL 图像"""
+    return Image.open(BytesIO(img_bytes))
 
 def base64_to_pil_image(
     base64_str: str,

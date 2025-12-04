@@ -87,3 +87,4 @@ class SplitFlag:
 class ImageType:
     PIL = 'pil_img'
     BASE64 = 'base64_img'
+    BYTES = 'bytes_img'

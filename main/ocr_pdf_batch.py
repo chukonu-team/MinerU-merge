@@ -158,10 +158,10 @@ def preprocessing_task_with_image_loading(batch, save_dir, **kwargs):
     images_count_per_pdf = []
     pdf_processing_status = []
 
-    # 遍历所有PDF文档，加载图像（使用BASE64格式以支持序列化）
+    # 遍历所有PDF文档，加载图像（使用BYTES格式以支持序列化）
     for pdf_bytes in pdf_bytes_list:
         try:
-            images_list, pdf_doc = load_images_from_pdf(pdf_bytes, image_type=ImageType.BASE64)
+            images_list, pdf_doc = load_images_from_pdf(pdf_bytes, image_type=ImageType.BYTES)
             all_images_list.extend(images_list)
             images_count_per_pdf.append(len(images_list))
             pdf_processing_status.append(True)  # 标记为成功处理
@@ -182,22 +182,10 @@ def preprocessing_task_with_image_loading(batch, save_dir, **kwargs):
     # 直接使用pdf_bytes，避免序列化问题
     logging.info(f"使用pdf_bytes方式，避免pdf_doc序列化问题")
 
-    # 生成有效的PIL图像列表（从base64转换回PIL格式用于GPU处理）
-    images_pil_list = []
-    for image_dict in all_images_list:
-        if image_dict and isinstance(image_dict, dict) and "img_base64" in image_dict:
-            # 将base64字符串转换回PIL图像
-            try:
-                from mineru.utils.pdf_reader import base64_to_pil_image
-                pil_img = base64_to_pil_image(image_dict["img_base64"])
-                # 将PIL图像存储回字典中以保持兼容性
-                image_dict["img_pil"] = pil_img
-                images_pil_list.append(pil_img)
-            except Exception as e:
-                logging.warning(f"转换base64图像到PIL失败: {e}")
+
 
     total_preprocess_time = time.time() - start
-    logging.info(f"增强预处理完成，总耗时{total_preprocess_time:.2f}秒，有效图像数: {len(images_pil_list)}")
+    logging.info(f"增强预处理完成，总耗时{total_preprocess_time:.2f}秒，有效图像数: {len(all_images_list)}")
 
     # 返回预处理后的数据（直接使用pdf_bytes，不包含all_pdf_docs避免序列化问题）
     return {
@@ -208,7 +196,7 @@ def preprocessing_task_with_image_loading(batch, save_dir, **kwargs):
         'preprocess_time': preprocess_time,
         'image_loading_time': image_loading_time,
         'total_preprocess_time': total_preprocess_time,
-        'all_images_list': all_images_list,  # 包含base64图像数据，可以序列化
+        'all_images_list': all_images_list,  # 包含bytes图像数据，可以序列化
         'images_count_per_pdf': images_count_per_pdf,
         'pdf_processing_status': pdf_processing_status,
         'images_pil_list': [],  # 清空PIL图像列表，避免序列化问题
@@ -283,21 +271,21 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
     logging.info(f"GPU处理阶段1开始（基于预加载图像）: {batch.get('file_names', [])}")
 
     try:
-        # 步骤1: 数据预处理 - 从base64图像数据重建PIL图像列表
+        # 步骤1: 数据预处理 - 从bytes图像数据重建PIL图像列表
         data_preprocess_start = time.time()
         images_pil_list = []
         for image_dict in all_images_list:
-            if image_dict and isinstance(image_dict, dict) and "img_base64" in image_dict:
-                # 将base64字符串转换回PIL图像
+            if image_dict and isinstance(image_dict, dict) and "img_bytes" in image_dict:
+                # 将bytes转换回PIL图像
                 try:
-                    from mineru.utils.pdf_reader import base64_to_pil_image
-                    pil_img = base64_to_pil_image(image_dict["img_base64"])
+                    from mineru.utils.pdf_reader import bytes_to_pil
+                    pil_img = bytes_to_pil(image_dict["img_bytes"])
                     images_pil_list.append(pil_img)
                 except Exception as e:
-                    logging.warning(f"转换base64图像到PIL失败: {e}")
+                    logging.warning(f"转换bytes图像到PIL失败: {e}")
 
         data_preprocess_time = time.time() - data_preprocess_start
-        logging.info(f"步骤1 - 数据预处理 (base64→PIL转换): {data_preprocess_time:.2f}秒")
+        logging.info(f"步骤1 - 数据预处理 (bytes→PIL转换): {data_preprocess_time:.2f}秒")
 
         # 如果没有有效的图像，直接返回GPU结果用于后处理
         if not images_pil_list:
@@ -331,7 +319,7 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
         # 详细时间分析汇总
         logging.info(f"=== GPU处理阶段1详细时间分析汇总 ===")
         if 'data_preprocess_time' in locals():
-            logging.info(f"数据预处理 (base64→PIL转换): {data_preprocess_time:.2f}秒 ({data_preprocess_time/total_time*100:.1f}%)")
+            logging.info(f"数据预处理 (bytes→PIL转换): {data_preprocess_time:.2f}秒 ({data_preprocess_time/total_time*100:.1f}%)")
         if 'model_init_time' in locals():
             logging.info(f"模型初始化: {model_init_time:.2f}秒 ({model_init_time/total_time*100:.1f}%)")
         if 'gpu_time' in locals():
@@ -430,7 +418,22 @@ def postprocessing_task(gpu_result_data, **kwargs):
                 continue
 
             # 获取当前PDF的图像列表和结果
-            current_images_list = all_images_list[image_idx: image_idx + current_pdf_images_count]
+            # current_images_list = all_images_list[image_idx: image_idx + current_pdf_images_count]
+            current_images_list = []
+            for image_dict in all_images_list[image_idx: image_idx + current_pdf_images_count]:
+                if image_dict and isinstance(image_dict, dict) and "img_bytes" in image_dict:
+                    # 将bytes转换回PIL图像
+                    try:
+                        from mineru.utils.pdf_reader import bytes_to_pil
+                        pil_img = bytes_to_pil(image_dict["img_bytes"])
+                        current_images_list.append({"img_pil":pil_img,"scale":image_dict["scale"]})
+                    except Exception as e:
+                        logging.warning(f"转换bytes图像到PIL失败: {e}")
+
+                
+            
+            
+            
             current_gpu_results = gpu_results[image_idx: image_idx + current_pdf_images_count]
 
             # 为当前PDF生成middle_json，使用pdf_bytes避免序列化问题
