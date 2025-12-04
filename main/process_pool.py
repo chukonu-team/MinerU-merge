@@ -105,7 +105,7 @@ def _postprocessing_worker(worker_id: int, postprocessing_queue: mp.Queue,
             # 从后处理队列获取GPU处理结果
             task = postprocessing_queue.get(timeout=600.0)
             if task is None:
-                break
+                continue
 
             task_id, func, args, kwargs = task
 
