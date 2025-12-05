@@ -51,20 +51,26 @@ def preprocessing_worker(batch, save_dir, **kwargs):
     read_start = time.time()
 
     # 读取PDF文件并转换为字节格式
-    for i in range(len(pdf_paths) - 1, -1, -1):
+    for pdf_path in pdf_paths:
         try:
-            pdf_bytes = read_fn(pdf_paths[i])
+            pdf_bytes = read_fn(pdf_path)
             pdf_bytes = convert_pdf_bytes_to_bytes_by_pypdfium2(pdf_bytes, 0, None)
             pdf_bytes_list.append(pdf_bytes)
-            pdf_name = os.path.basename(pdf_paths[i])
+            pdf_name = os.path.basename(pdf_path)
             local_image_dir = f"/mnt/data/mineru_ocr_local_image_dir/{pdf_name}"
             if not os.path.exists(local_image_dir):
                 os.makedirs(local_image_dir, exist_ok=True)
             local_image_dirs.append(local_image_dir)
         except Exception as e:
-            logging.warning(f"加载 {pdf_paths[i]} 失败: {e}")
+            logging.warning(f"加载 {pdf_path} 失败: {e}")
             traceback.print_exc()
-            del pdf_paths[i]
+            # 使用None填充占位，保持列表长度一致
+            pdf_bytes_list.append(None)
+            pdf_name = os.path.basename(pdf_path)
+            local_image_dir = f"/mnt/data/mineru_ocr_local_image_dir/{pdf_name}"
+            if not os.path.exists(local_image_dir):
+                os.makedirs(local_image_dir, exist_ok=True)
+            local_image_dirs.append(local_image_dir)
 
     preprocess_time = time.time() - read_start
     logging.info(f"PDF读取完毕，耗时{preprocess_time:.2f}秒")
@@ -80,6 +86,12 @@ def preprocessing_worker(batch, save_dir, **kwargs):
 
     # 遍历所有PDF文档，加载图像（使用BYTES格式以支持序列化）
     for pdf_bytes in pdf_bytes_list:
+        if pdf_bytes is None:
+            # PDF字节数据为空，直接标记为失败
+            images_count_per_pdf.append(0)
+            pdf_processing_status.append(False)
+            continue
+
         try:
             images_list, pdf_doc = load_images_from_pdf(pdf_bytes, image_type=ImageType.BYTES)
             all_images_list.extend(images_list)
@@ -107,20 +119,48 @@ def preprocessing_worker(batch, save_dir, **kwargs):
     total_preprocess_time = time.time() - start
     logging.info(f"增强预处理完成，总耗时{total_preprocess_time:.2f}秒，有效图像数: {len(all_images_list)}")
 
-    # 返回预处理后的数据（直接使用pdf_bytes，不包含all_pdf_docs避免序列化问题）
+    # 过滤掉无效的PDF，只保留成功的
+    valid_indices = [i for i, status in enumerate(pdf_processing_status) if status]
+    valid_pdf_bytes_list = [pdf_bytes_list[i] for i in valid_indices]
+    valid_local_image_dirs = [local_image_dirs[i] for i in valid_indices]
+    valid_pdf_paths = [pdf_paths[i] for i in valid_indices]
+    valid_images_count_per_pdf = [images_count_per_pdf[i] for i in valid_indices]
+    valid_pdf_processing_status = [pdf_processing_status[i] for i in valid_indices]
+
+    # 重新构建有效的all_images_list，只包含成功PDF的图像
+    valid_all_images_list = []
+    image_idx = 0
+    for i, count in enumerate(images_count_per_pdf):
+        if pdf_processing_status[i] and count > 0:
+            # 添加当前PDF的所有图像到有效列表
+            valid_all_images_list.extend(all_images_list[image_idx:image_idx + count])
+        image_idx += count
+
+    successful_count = len(valid_indices)
+    total_count = len(pdf_paths)
+
+    logging.info(f"过滤结果: 成功 {successful_count}/{total_count} 个PDF，有效图像数: {len(valid_all_images_list)}")
+    if successful_count < total_count:
+        failed_indices = [i for i, status in enumerate(pdf_processing_status) if not status]
+        failed_files = [os.path.basename(pdf_paths[i]) for i in failed_indices]
+        logging.warning(f"跳过的文件: {failed_files}")
+
+    # 返回过滤后的预处理数据（只包含成功的PDF）
     return {
-        'pdf_bytes_list': pdf_bytes_list,
-        'local_image_dirs': local_image_dirs,
-        'pdf_paths': pdf_paths,
+        'pdf_bytes_list': valid_pdf_bytes_list,
+        'local_image_dirs': valid_local_image_dirs,
+        'pdf_paths': valid_pdf_paths,
         'save_dir': save_dir,
         'preprocess_time': preprocess_time,
         'image_loading_time': image_loading_time,
         'total_preprocess_time': total_preprocess_time,
-        'all_images_list': all_images_list,  # 包含bytes图像数据，可以序列化
-        'images_count_per_pdf': images_count_per_pdf,
-        'pdf_processing_status': pdf_processing_status,
+        'all_images_list': valid_all_images_list,  # 只包含成功PDF的bytes图像数据
+        'images_count_per_pdf': valid_images_count_per_pdf,
+        'pdf_processing_status': valid_pdf_processing_status,  # 现在全部为True
         'images_pil_list': [],  # 清空PIL图像列表，避免序列化问题
-        'batch_info': batch
+        'batch_info': batch,
+        'original_batch_size': total_count,  # 保存原始批次大小用于日志
+        'successful_count': successful_count  # 保存成功数量
     }
 
 
@@ -129,79 +169,100 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
     """
     GPU处理函数 - 使用GPU进行文档分析的第一阶段（只包含batch_two_step_extract）
     这部分工作需要GPU，只处理推理部分，结果保存交给后处理CPU队列
+    预处理阶段已经过滤掉无效PDF，这里只处理有效的数据
     """
     start = time.time()
     logging.info(f"=== GPU处理阶段1详细时间分析开始 ===")
 
-    # 从预处理数据中获取所有必要信息
+    # 从预处理数据中获取所有必要信息（已经是过滤后的有效数据）
     all_images_list = preprocessed_data['all_images_list']
     pdf_bytes_list = preprocessed_data['pdf_bytes_list']  # PDF字节数据
     images_count_per_pdf = preprocessed_data['images_count_per_pdf']
-    pdf_processing_status = preprocessed_data['pdf_processing_status']
+    pdf_processing_status = preprocessed_data['pdf_processing_status']  # 现在应该全部为True
     save_dir = preprocessed_data['save_dir']
     local_image_dirs = preprocessed_data['local_image_dirs']
     batch = preprocessed_data['batch_info']
 
-    logging.info(f"准备处理 {len(pdf_bytes_list)} 个PDF字节数据对象")
-    logging.info(f"GPU处理阶段1开始（基于预加载图像）: {batch.get('file_names', [])}")
+    original_batch_size = preprocessed_data.get('original_batch_size', 0)
+    successful_count = preprocessed_data.get('successful_count', 0)
+
+    logging.info(f"GPU处理开始: 原始批次{original_batch_size}个文件，成功{successful_count}个，有效图像数: {len(all_images_list)}")
+
+    # 如果没有有效图像，直接返回空结果
+    if not all_images_list:
+        logging.warning("没有有效图像，跳过GPU处理")
+        return {
+            'success': True,
+            'gpu_results': [],
+            'preprocess_time': preprocessed_data.get('preprocess_time', 0),
+            'image_loading_time': preprocessed_data.get('image_loading_time', 0),
+            'total_preprocess_time': preprocessed_data.get('total_preprocess_time', 0),
+            'total_time': time.time() - start,
+            'data_preprocess_time': 0,
+            'model_init_time': 0,
+            'gpu_time': 0,
+            'batch_info': batch,
+            'all_images_list': all_images_list,
+            'pdf_bytes_list': pdf_bytes_list,
+            'images_count_per_pdf': images_count_per_pdf,
+            'pdf_processing_status': pdf_processing_status,
+            'save_dir': save_dir,
+            'local_image_dirs': local_image_dirs
+        }
 
     try:
         # 步骤1: 数据预处理 - 从bytes图像数据重建PIL图像列表
         data_preprocess_start = time.time()
         images_pil_list = []
+
+        # 转换bytes图像数据为PIL格式（所有数据都是有效的）
         for image_dict in all_images_list:
-            if image_dict and isinstance(image_dict, dict) and "img_bytes" in image_dict:
-                # 将bytes转换回PIL图像
-                try:
-                    from mineru.utils.pdf_reader import bytes_to_pil
-                    pil_img = bytes_to_pil(image_dict["img_bytes"])
-                    images_pil_list.append(pil_img)
-                except Exception as e:
-                    logging.warning(f"转换bytes图像到PIL失败: {e}")
+            try:
+                from mineru.utils.pdf_reader import bytes_to_pil
+                pil_img = bytes_to_pil(image_dict["img_bytes"])
+                images_pil_list.append(pil_img)
+            except Exception as e:
+                logging.warning(f"转换bytes图像到PIL失败: {e}")
 
         data_preprocess_time = time.time() - data_preprocess_start
-        logging.info(f"步骤1 - 数据预处理 (bytes→PIL转换): {data_preprocess_time:.2f}秒")
+        logging.info(f"步骤1 - 数据预处理 (bytes→PIL转换): {data_preprocess_time:.2f}秒，转换图像数: {len(images_pil_list)}")
 
-        # 如果没有有效的图像，直接返回GPU结果用于后处理
-        if not images_pil_list:
-            logging.warning("没有有效的图像，返回GPU结果用于后处理")
-            gpu_results = []
-        else:
-            # 步骤2: 模型初始化
-            model_init_start = time.time()
-            backend = os.environ.get("BACKEND", "vllm-engine")
-            logging.info(f"backend: {backend}")
+        # 步骤2: 模型初始化
+        model_init_start = time.time()
+        backend = os.environ.get("BACKEND", "vllm-engine")
+        logging.info(f"backend: {backend}")
 
-            # 过滤掉不支持的参数，只传递有效的GPU配置
-            filtered_kwargs = kwargs.copy()
-            gpu_memory_utilization = os.environ.get("GPU_MEMORY_UTILIZATION",0.5)
-            filtered_kwargs["gpu_memory_utilization"]=gpu_memory_utilization
-            if 'gpu_id' in filtered_kwargs:
-                del filtered_kwargs['gpu_id']  # vLLM不支持gpu_id参数
+        # 过滤掉不支持的参数，只传递有效的GPU配置
+        filtered_kwargs = kwargs.copy()
+        gpu_memory_utilization = os.environ.get("GPU_MEMORY_UTILIZATION",0.5)
+        filtered_kwargs["gpu_memory_utilization"]=gpu_memory_utilization
+        if 'gpu_id' in filtered_kwargs:
+            del filtered_kwargs['gpu_id']  # vLLM不支持gpu_id参数
 
-            from mineru.backend.vlm.vlm_analyze import ModelSingleton
+        from mineru.backend.vlm.vlm_analyze import ModelSingleton
 
-            predictor = ModelSingleton().get_model(backend, None, None, **filtered_kwargs)
-            model_init_time = time.time() - model_init_start
-            logging.info(f"步骤2 - 模型初始化: {model_init_time:.2f}秒")
+        predictor = ModelSingleton().get_model(backend, None, None, **filtered_kwargs)
+        model_init_time = time.time() - model_init_start
+        logging.info(f"步骤2 - 模型初始化: {model_init_time:.2f}秒")
 
-            # 步骤3: GPU推理 - 只调用batch_two_step_extract
-            gpu_start = time.time()
-            gpu_results = predictor.batch_two_step_extract(images=images_pil_list)
-            gpu_time = time.time() - gpu_start
-            logging.info(f"步骤3 - GPU推理 (纯AI模型推理): {gpu_time:.2f}秒")
+        # 步骤3: GPU推理 - 只调用batch_two_step_extract
+        gpu_start = time.time()
+        gpu_results = predictor.batch_two_step_extract(images=images_pil_list)
+        gpu_time = time.time() - gpu_start
+        logging.info(f"步骤3 - GPU推理 (纯AI模型推理): {gpu_time:.2f}秒，推理结果数: {len(gpu_results)}")
 
         total_time = time.time() - start
         logging.info(f"GPU处理阶段1完成，总耗时{total_time:.2f}秒")
 
         # 详细时间分析汇总
         logging.info(f"=== GPU处理阶段1详细时间分析汇总 ===")
-        if 'data_preprocess_time' in locals():
-            logging.info(f"数据预处理 (bytes→PIL转换): {data_preprocess_time:.2f}秒 ({data_preprocess_time/total_time*100:.1f}%)")
-        if 'model_init_time' in locals():
-            logging.info(f"模型初始化: {model_init_time:.2f}秒 ({model_init_time/total_time*100:.1f}%)")
-        if 'gpu_time' in locals():
-            logging.info(f"GPU推理 (纯AI模型推理): {gpu_time:.2f}秒 ({gpu_time/total_time*100:.1f}%)")
+        logging.info(f"数据预处理 (bytes→PIL转换): {data_preprocess_time:.2f}秒 ({data_preprocess_time/total_time*100:.1f}%)")
+        logging.info(f"模型初始化: {model_init_time:.2f}秒 ({model_init_time/total_time*100:.1f}%)")
+        logging.info(f"GPU推理 (纯AI模型推理): {gpu_time:.2f}秒 ({gpu_time/total_time*100:.1f}%)")
+
+        # 验证GPU结果数量与图像数量匹配
+        if len(gpu_results) != len(images_pil_list):
+            logging.warning(f"GPU结果数量({len(gpu_results)})与图像数量({len(images_pil_list)})不匹配")
 
         # 返回GPU处理结果，包含所有必要信息给后处理阶段
         return {
@@ -211,11 +272,10 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
             'image_loading_time': preprocessed_data.get('image_loading_time', 0),
             'total_preprocess_time': preprocessed_data.get('total_preprocess_time', 0),
             'total_time': total_time,
-            'data_preprocess_time': data_preprocess_time if 'data_preprocess_time' in locals() else 0,
-            'model_init_time': model_init_time if 'model_init_time' in locals() else 0,
-            'gpu_time': gpu_time if 'gpu_time' in locals() else 0,
+            'data_preprocess_time': data_preprocess_time,
+            'model_init_time': model_init_time,
+            'gpu_time': gpu_time,
             'batch_info': batch,
-            # 传递后处理需要的所有数据
             'all_images_list': all_images_list,
             'pdf_bytes_list': pdf_bytes_list,
             'images_count_per_pdf': images_count_per_pdf,
@@ -235,7 +295,6 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
             'traceback': traceback.format_exc(),
             'error_time': error_time,
             'batch_info': batch,
-            # 传递后处理需要的所有数据，以便后处理能正确处理错误情况
             'all_images_list': all_images_list,
             'pdf_bytes_list': pdf_bytes_list,
             'images_count_per_pdf': images_count_per_pdf,
@@ -249,6 +308,8 @@ def postprocessing_task(gpu_result_data, **kwargs):
     """
     后处理CPU队列任务函数 - 处理GPU结果后的文件保存等耗时操作
     这部分工作在CPU上处理，包括result_to_middle_json、JSON序列化、ZIP压缩写入等
+
+    注意：现在接收到的是过滤后的数据，需要为所有原始文件生成结果（包括失败的）
     """
     start = time.time()
     logging.info(f"=== 后处理CPU任务开始 ===")
@@ -263,11 +324,15 @@ def postprocessing_task(gpu_result_data, **kwargs):
     local_image_dirs = gpu_result_data.get('local_image_dirs', [])
     batch = gpu_result_data.get('batch_info', {})
 
+    # 获取原始批次信息
+    original_batch_size = gpu_result_data.get('original_batch_size', 0)
+    successful_count = gpu_result_data.get('successful_count', 0)
+
     # 检查GPU处理是否成功
     gpu_success = gpu_result_data.get('success', False)
     gpu_error = gpu_result_data.get('error')
 
-    logging.info(f"后处理开始: GPU处理成功={gpu_success}, 待处理文件数={len(pdf_processing_status)}")
+    logging.info(f"后处理开始: 原始批次{original_batch_size}个文件，成功{successful_count}个，GPU成功={gpu_success}")
 
     try:
         # 步骤1: 结果后处理 - 为每个PDF文档分别生成middle_json

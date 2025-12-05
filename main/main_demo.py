@@ -19,8 +19,8 @@ def process():
     os.environ["GPU_MEMORY_UTILIZATION"] = "0.5"  # 降低到30%
     os.environ["BACKEND"] = "vllm-engine"  # 使用transformers后端代替vLLM
 
-    # pdf_dir = "/home/ubuntu/MinerU-merge/demo/pdfs"  # 输入目录
-    pdf_dir = "/home/ubuntu/OpenDataLab___OmniDocBench/pdfs/pdfs"
+    pdf_dir = "/home/ubuntu/MinerU-merge/demo/pdfs"  # 输入目录
+    # pdf_dir = "/home/ubuntu/OpenDataLab___OmniDocBench/pdfs/pdfs"
     output_dir = "/tmp/result"  # 输出目录
 
     # 检查是否有子目录，如果没有则直接处理根目录
