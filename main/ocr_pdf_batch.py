@@ -44,30 +44,39 @@ def preprocessing_worker(batch, save_dir, **kwargs):
     start = time.time()
     logging.info(f"增强预处理批次开始: {batch.get('file_names', [])}")
 
-    pdf_bytes_list = []
-    local_image_dirs = []
-    pdf_paths = batch['files'].copy()
+    # 使用新的方法避免索引错乱问题
+    valid_pdf_paths = []
+    valid_pdf_bytes = []
+    valid_local_image_dirs = []
+    valid_file_indices = []  # 记录有效文件在原始数组中的索引
 
+    original_pdf_paths = batch['files'].copy()
     read_start = time.time()
 
-    # 读取PDF文件并转换为字节格式
-    for i in range(len(pdf_paths) - 1, -1, -1):
+    # 正向遍历，构建有效文件列表
+    for i, pdf_path in enumerate(original_pdf_paths):
         try:
-            pdf_bytes = read_fn(pdf_paths[i])
+            pdf_bytes = read_fn(pdf_path)
             pdf_bytes = convert_pdf_bytes_to_bytes_by_pypdfium2(pdf_bytes, 0, None)
-            pdf_bytes_list.append(pdf_bytes)
-            pdf_name = os.path.basename(pdf_paths[i])
+
+            valid_pdf_paths.append(pdf_path)
+            valid_pdf_bytes.append(pdf_bytes)
+            valid_file_indices.append(i)  # 记录原始索引
+
+            pdf_name = os.path.basename(pdf_path)
             local_image_dir = f"/mnt/data/mineru_ocr_local_image_dir/{pdf_name}"
             if not os.path.exists(local_image_dir):
                 os.makedirs(local_image_dir, exist_ok=True)
-            local_image_dirs.append(local_image_dir)
+            valid_local_image_dirs.append(local_image_dir)
+
         except Exception as e:
-            logging.warning(f"加载 {pdf_paths[i]} 失败: {e}")
+            logging.warning(f"加载 {pdf_path} (索引{i}) 失败: {e}")
             traceback.print_exc()
-            del pdf_paths[i]
 
     preprocess_time = time.time() - read_start
     logging.info(f"PDF读取完毕，耗时{preprocess_time:.2f}秒")
+    logging.info(f"有效文件数量: {len(valid_pdf_paths)}/{len(original_pdf_paths)}")
+    # logging.info(f"有效文件索引: {valid_file_indices}")
 
     # 加载图像（这部分原在batch_doc_analyze中）
     image_loading_start = time.time()
@@ -78,8 +87,8 @@ def preprocessing_worker(batch, save_dir, **kwargs):
     images_count_per_pdf = []
     pdf_processing_status = []
 
-    # 遍历所有PDF文档，加载图像（使用BYTES格式以支持序列化）
-    for pdf_bytes in pdf_bytes_list:
+    # 遍历所有有效的PDF文档，加载图像（使用BYTES格式以支持序列化）
+    for pdf_bytes in valid_pdf_bytes:
         try:
             images_list, pdf_doc = load_images_from_pdf(pdf_bytes, image_type=ImageType.BYTES)
             all_images_list.extend(images_list)
@@ -99,19 +108,27 @@ def preprocessing_worker(batch, save_dir, **kwargs):
     image_loading_time = time.time() - image_loading_start
     logging.info(f"图像加载完毕，耗时{image_loading_time:.2f}秒")
 
-    # 直接使用pdf_bytes，避免序列化问题
-    logging.info(f"使用pdf_bytes方式，避免pdf_doc序列化问题")
-
-
-
     total_preprocess_time = time.time() - start
     logging.info(f"增强预处理完成，总耗时{total_preprocess_time:.2f}秒，有效图像数: {len(all_images_list)}")
 
-    # 返回预处理后的数据（直接使用pdf_bytes，不包含all_pdf_docs避免序列化问题）
+    # 创建文件映射关系，避免索引错乱
+    file_mapping = {
+        'original_files': original_pdf_paths,
+        'valid_files': valid_pdf_paths,
+        'valid_indices': valid_file_indices,
+        'index_mapping': {
+            new_idx: original_idx
+            for new_idx, original_idx in enumerate(valid_file_indices)
+        }
+    }
+
+    logging.info(f"文件映射关系: {file_mapping}")
+
+    # 返回预处理后的数据，包含完整的文件映射信息
     return {
-        'pdf_bytes_list': pdf_bytes_list,
-        'local_image_dirs': local_image_dirs,
-        'pdf_paths': pdf_paths,
+        'pdf_bytes_list': valid_pdf_bytes,
+        'local_image_dirs': valid_local_image_dirs,
+        'pdf_paths': valid_pdf_paths,  # 使用有效文件列表
         'save_dir': save_dir,
         'preprocess_time': preprocess_time,
         'image_loading_time': image_loading_time,
@@ -120,7 +137,9 @@ def preprocessing_worker(batch, save_dir, **kwargs):
         'images_count_per_pdf': images_count_per_pdf,
         'pdf_processing_status': pdf_processing_status,
         'images_pil_list': [],  # 清空PIL图像列表，避免序列化问题
-        'batch_info': batch
+        'batch_info': batch,
+        # 添加文件映射信息，确保后处理时能正确映射文件
+        'file_mapping': file_mapping
     }
 
 
@@ -141,9 +160,11 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
     save_dir = preprocessed_data['save_dir']
     local_image_dirs = preprocessed_data['local_image_dirs']
     batch = preprocessed_data['batch_info']
+    file_mapping = preprocessed_data.get('file_mapping', {})  # 获取文件映射信息
 
     logging.info(f"准备处理 {len(pdf_bytes_list)} 个PDF字节数据对象")
     logging.info(f"GPU处理阶段1开始（基于预加载图像）: {batch.get('file_names', [])}")
+    logging.info(f"文件映射: 原始{len(file_mapping.get('original_files', []))}, 有效{len(file_mapping.get('valid_files', []))}")
 
     try:
         # 步骤1: 数据预处理 - 从bytes图像数据重建PIL图像列表
@@ -221,7 +242,9 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
             'images_count_per_pdf': images_count_per_pdf,
             'pdf_processing_status': pdf_processing_status,
             'save_dir': save_dir,
-            'local_image_dirs': local_image_dirs
+            'local_image_dirs': local_image_dirs,
+            # 传递文件映射信息，确保后处理能正确映射文件
+            'file_mapping': file_mapping
         }
 
     except Exception as e:
@@ -241,8 +264,32 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
             'images_count_per_pdf': images_count_per_pdf,
             'pdf_processing_status': pdf_processing_status,
             'save_dir': save_dir,
-            'local_image_dirs': local_image_dirs
+            'local_image_dirs': local_image_dirs,
+            # 传递文件映射信息，确保后处理能正确映射文件
+            'file_mapping': file_mapping
         }
+
+
+def validate_result_match(pdf_path, middle_json, expected_pages):
+    """验证结果是否匹配输入文件"""
+    try:
+        if middle_json is None:
+            return False, "middle_json is None"
+
+        # 检查页数匹配
+        actual_pages = len(middle_json.get('pages', []))
+        if abs(actual_pages - expected_pages) > 1:  # 允许1页误差
+            return False, f"Page count mismatch: expected {expected_pages}, got {actual_pages}"
+
+        # 检查文件名匹配
+        result_filename = middle_json.get('pdf_fname', '')
+        pdf_basename = os.path.basename(pdf_path).replace('.pdf', '')
+        if result_filename and result_filename != pdf_basename:
+            return False, f"Filename mismatch: expected {pdf_basename}, got {result_filename}"
+
+        return True, "Validation passed"
+    except Exception as e:
+        return False, f"Validation error: {str(e)}"
 
 
 def postprocessing_task(gpu_result_data, **kwargs):
@@ -262,6 +309,14 @@ def postprocessing_task(gpu_result_data, **kwargs):
     save_dir = gpu_result_data.get('save_dir')
     local_image_dirs = gpu_result_data.get('local_image_dirs', [])
     batch = gpu_result_data.get('batch_info', {})
+    file_mapping = gpu_result_data.get('file_mapping', {})  # 获取文件映射信息
+
+    # 提取映射信息
+    valid_files = file_mapping.get('valid_files', [])
+    index_mapping = file_mapping.get('index_mapping', {})
+
+    logging.info(f"后处理开始: GPU处理成功={gpu_success}, 待处理文件数={len(pdf_processing_status)}")
+    logging.info(f"文件映射: 有效文件数={len(valid_files)}, 映射关系={index_mapping}")
 
     # 检查GPU处理是否成功
     gpu_success = gpu_result_data.get('success', False)
@@ -373,12 +428,13 @@ def postprocessing_task(gpu_result_data, **kwargs):
                 logging.warning(f"  跳过文件 {i+1}: 预处理失败")
                 continue
 
-            # 从原始batch信息中获取PDF路径
-            if 'files' in batch and i < len(batch['files']):
-                pdf_path = batch['files'][i]
-                logging.info(f"  PDF路径: {pdf_path}")
+            # 使用文件映射获取正确的PDF路径
+            if i < len(valid_files):
+                pdf_path = valid_files[i]  # 使用有效文件列表，确保文件映射正确
+                original_index = index_mapping.get(i, i)  # 获取原始索引
+                logging.info(f"  PDF路径: {pdf_path} (当前索引:{i}, 原始索引:{original_index})")
             else:
-                logging.error(f"  无法获取PDF路径: batch['files']存在={('files' in batch)}, i={i}, len(batch['files'])={len(batch.get('files', []))}")
+                logging.error(f"  索引超出范围: i={i}, len(valid_files)={len(valid_files)}")
                 continue
 
             pdf_file_name = os.path.basename(pdf_path).replace(".pdf", "")
@@ -386,6 +442,23 @@ def postprocessing_task(gpu_result_data, **kwargs):
 
             if middle_json is not None:
                 logging.info(f"  开始生成target_file...")
+
+                # 步骤2.0: 验证结果匹配
+                expected_pages = get_pdf_page_count(pdf_path)
+                is_valid, validation_msg = validate_result_match(pdf_path, middle_json, expected_pages)
+                logging.info(f"  步骤2.0 - 结果验证: {validation_msg}")
+
+                if not is_valid:
+                    logging.warning(f"  ❌ 结果验证失败: {validation_msg}")
+                    # 验证失败时不保存，创建失败结果
+                    result = {
+                        'input_path': pdf_path,
+                        'output_path': None,
+                        'success': False,
+                        'reason': f'Validation failed: {validation_msg}'
+                    }
+                    final_results.append(result)
+                    continue
 
                 try:
                     # 步骤2.1: 创建推理结果
@@ -396,6 +469,9 @@ def postprocessing_task(gpu_result_data, **kwargs):
                     res_json_str = json.dumps(infer_result, ensure_ascii=False)
                     json_size = len(res_json_str.encode('utf-8'))
                     logging.info(f"  步骤2.2 - JSON序列化: 成功, 大小: {json_size} bytes")
+
+                    # 添加验证信息到日志
+                    logging.info(f"  ✅ 文件验证通过: 页数={expected_pages}, 文件名匹配 ✓")
 
                     # 步骤2.3: 创建结果目录
                     result_dir = f"{save_dir}/result"
@@ -518,8 +594,10 @@ def postprocessing_task(gpu_result_data, **kwargs):
             if not is_success:
                 continue
 
-            if 'files' in batch and i < len(batch['files']):
-                pdf_path = batch['files'][i]
+            # 使用文件映射获取正确的PDF路径
+            if i < len(valid_files):
+                pdf_path = valid_files[i]
+                original_index = index_mapping.get(i, i)
                 failure_reason = f'Postprocessing failed: {str(e)}'
                 if not gpu_success:
                     failure_reason = f'GPU processing failed: {gpu_error}'
@@ -528,7 +606,8 @@ def postprocessing_task(gpu_result_data, **kwargs):
                     'input_path': pdf_path,
                     'output_path': None,
                     'success': False,
-                    'reason': failure_reason
+                    'reason': failure_reason,
+                    'original_index': original_index
                 })
 
                 # 保存页面结果信息

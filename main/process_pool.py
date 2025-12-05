@@ -2,6 +2,7 @@ import multiprocessing as mp
 import time
 import os
 import traceback
+import uuid
 from typing import Dict, Any, Callable, Optional
 from dataclasses import dataclass
 from queue import Empty, Full
@@ -364,8 +365,9 @@ class SimpleProcessPool:
         print(f"Created worker {worker_id} on GPU {gpu_id} with PID {process.pid}")
         return worker_id
 
-    def submit_task(self, func: Callable, *args, **kwargs) -> int:
-        task_id = int(time.time() * 1000000)
+    def submit_task(self, func: Callable, *args, **kwargs) -> str:
+        # 使用UUID确保任务ID唯一性，避免高并发时的冲突
+        task_id = str(uuid.uuid4())
         task = (task_id, func, args, kwargs)
 
         # 根据是否启用预处理选择提交队列
