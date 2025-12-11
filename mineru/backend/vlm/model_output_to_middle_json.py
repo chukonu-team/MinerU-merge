@@ -100,6 +100,11 @@ def blocks_to_page_info(page_blocks, image_dict, page, image_writer, page_index)
 
 
 def result_to_middle_json(model_output_blocks_list, images_list, pdf_doc, image_writer):
+    start_time = time.time()
+    logger.info(f"=== result_to_middle_json 详细时间分析开始 ===")
+
+    # 步骤1: 构建页面信息
+    page_info_start = time.time()
     middle_json = {"pdf_info": [], "_backend":"vlm", "_version_name": __version__}
     for index, page_blocks in enumerate(model_output_blocks_list):
         page = pdf_doc[index]
@@ -107,17 +112,39 @@ def result_to_middle_json(model_output_blocks_list, images_list, pdf_doc, image_
         page_info = blocks_to_page_info(page_blocks, image_dict, page, image_writer, index)
         middle_json["pdf_info"].append(page_info)
 
-    """表格跨页合并"""
+    page_info_time = time.time() - page_info_start
+    logger.info(f"result_to_middle_json - 步骤1: 构建页面信息: {round(page_info_time, 2)}秒")
+
+    # 步骤2: 表格跨页合并
+    table_merge_time = 0
     table_enable = get_table_enable(os.getenv('MINERU_VLM_TABLE_ENABLE', 'True').lower() == 'true')
     if table_enable:
+        table_merge_start = time.time()
         cross_page_table_merge(middle_json["pdf_info"])
+        table_merge_time = time.time() - table_merge_start
+        logger.info(f"result_to_middle_json - 步骤2: 表格跨页合并: {round(table_merge_time, 2)}秒")
 
-    """llm优化标题分级"""
+    # 步骤3: LLM优化标题分级
+    llm_title_time = 0
     if heading_level_import_success:
         llm_aided_title_start_time = time.time()
         llm_aided_title(middle_json["pdf_info"], title_aided_config)
-        logger.info(f'llm aided title time: {round(time.time() - llm_aided_title_start_time, 2)}')
+        llm_title_time = time.time() - llm_aided_title_start_time
+        logger.info(f'result_to_middle_json - 步骤3: LLM优化标题分级: {round(llm_title_time, 2)}秒')
 
-    # 关闭pdf文档
+    # 步骤4: 关闭PDF文档
+    pdf_close_start = time.time()
     pdf_doc.close()
+    pdf_close_time = time.time() - pdf_close_start
+    logger.info(f"result_to_middle_json - 步骤4: 关闭PDF文档: {round(pdf_close_time, 2)}秒")
+
+    # 计算总执行时间和详细分析
+    total_time = time.time() - start_time
+    logger.info(f"=== result_to_middle_json 详细时间分析汇总 ===")
+    logger.info(f"构建页面信息: {round(page_info_time, 2)}秒 ({page_info_time/total_time*100:.1f}%)")
+    logger.info(f"表格跨页合并: {round(table_merge_time, 2)}秒 ({table_merge_time/total_time*100:.1f}%)")
+    logger.info(f"LLM优化标题分级: {round(llm_title_time, 2)}秒 ({llm_title_time/total_time*100:.1f}%)")
+    logger.info(f"关闭PDF文档: {round(pdf_close_time, 2)}秒 ({pdf_close_time/total_time*100:.1f}%)")
+    logger.info(f"result_to_middle_json 总执行时间: {round(total_time, 2)} seconds")
+
     return middle_json
