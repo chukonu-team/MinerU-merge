@@ -26,7 +26,7 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-COPY ../MinerU-merge/  /data/MinerU/
+COPY .  /data/MinerU/
 WORKDIR /data/MinerU
 # Install mineru latest
 RUN python3 -m pip install -U pip -i https://mirrors.aliyun.com/pypi/simple && \
