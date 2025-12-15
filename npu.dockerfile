@@ -31,7 +31,7 @@ WORKDIR /data/MinerU
 # Install mineru latest
 RUN python3 -m pip install -U pip -i https://mirrors.aliyun.com/pypi/simple && \
     python3 -m pip install -e .[all] &&  \
-    python3 -m pip install numpy==1.26.4 \
+    python3 -m pip install  PyMuPDF numpy==1.26.4 \
                             opencv-python==4.11.0.86 \
                             loguru==0.7.3 \
                             -i https://mirrors.aliyun.com/pypi/simple && \
