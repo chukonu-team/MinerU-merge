@@ -49,6 +49,12 @@ RUN if [ -d "/usr/local/Ascend" ]; then \
         chown -R ma-user:ma-group /usr/local/Ascend && \
         chmod -R 775 /usr/local/Ascend; \
     fi
+# 设置Ascend目录权限
+RUN if [ -d "/data" ]; then \
+        chown -R ma-user:ma-group /data && \
+        chmod -R 775 /data; \
+    fi
+
 
 # 设置site-packages目录权限
 RUN find /usr/local -name "site-packages" -type d -exec chown -R ma-user:ma-group {} \; && \
