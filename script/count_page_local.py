@@ -1,8 +1,9 @@
+import argparse
 from pathlib import Path
 import json
 
 
-def analyze_json_files(folder_path):
+def analyze_json_files(folder_path , output_path):
     """使用pathlib实现的版本"""
     stats = {
         'total_files': 0, 'total_page_count': 0, 'total_file_size': 0,
@@ -69,7 +70,21 @@ def analyze_json_files(folder_path):
     print(f"总快速页数: {stats['total_fast_page_count']}")
     print(f"平均快速页数: {stats['avg_fast_page_count']:.2f}")
 
+    result = {
+        'total_files': stats['total_files'],
+        'total_page_count': stats['total_page_count'],
+        'total_file_size': stats['total_file_size']
+    }
+
+    with open(output_path, 'w', encoding='utf-8') as file:
+        json.dump(result, file, ensure_ascii=False, indent=4)
+
+
     return stats
 
 if __name__ == '__main__':
-    analyze_json_files("/root/wangshd/batch6/page_result")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", type=Path,  required=True , help="folder path")
+    parser.add_argument("--output", type=Path, required=True , help="output file path")
+    args = parser.parse_args()
+    analyze_json_files(args.input, args.output)

@@ -22,7 +22,6 @@ logging.basicConfig(
     format="%(asctime)s [PID:%(process)d][%(thread)d] %(levelname)s: %(message)s"
 )
 
-
 def get_pdf_page_count(pdf_path):
     """使用fitz获取PDF页数"""
     try:
