@@ -14,6 +14,7 @@ def process():
     batch_size = os.getenv("BATCH_SIZE")
     proportion = os.getenv("PROPORTION", 0)
     use_batch = bool(os.getenv("USE_BATCH", "True"))
+    min_size = int(os.getenv("MIN_SIZE",300))
 
     pdf_dir = "/mnt/data/pdf"
     list_dir = get_subdirectories(pdf_dir)
@@ -26,10 +27,22 @@ def process():
         if not has_files(pdf_path):
             continue
 
+        pdf_list = os.listdir(pdf_path)
+        pdf_count = len(pdf_list)
+
+        print(f"pdf_count================{pdf_count}")
+        if pdf_count < min_size:
+            continue
+
         result_dir = os.path.join(output_dir, bucket_index, "result")
         if os.path.exists(result_dir):
             result_list = os.listdir(result_dir)
-            pdf_list = os.listdir(pdf_path)
+            result_count = len(result_list)
+            print(f"result_count:{result_count}")
+
+            if pdf_count - result_count < min_size:
+                continue
+
             cur_proportion = (len(pdf_list) - len(result_list)) / len(pdf_list)
             print("cur_proportion", cur_proportion)
             if cur_proportion < float(proportion):
