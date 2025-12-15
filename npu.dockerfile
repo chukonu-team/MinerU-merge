@@ -81,8 +81,9 @@ WORKDIR /home/ma-user/work
 ENV PYTHONPATH=/home/ma-user/.local/lib/python3.11/site-packages:/usr/local/python3.11.13/lib/python3.11/site-packages:$PYTHONPATH
 ENV MINERU_MODEL_SOURCE=local
 
+ENV MINERU_TOOLS_CONFIG_JSON="/data/MinerU/mineru.json"
 # # Download models as root before switching to ma-user
-# RUN TORCH_DEVICE_BACKEND_AUTOLOAD=0 /bin/bash -c "mineru-models-download -s modelscope -m all"
+RUN TORCH_DEVICE_BACKEND_AUTOLOAD=0 /bin/bash -c "mineru-models-download -s modelscope -m all"
 
 # Set the entry point to activate the virtual environment and run the command line tool
 ENTRYPOINT ["/bin/bash", "-l", "-c", "export MINERU_MODEL_SOURCE=local && exec \"$@\"", "--"]
