@@ -57,7 +57,7 @@ def preprocessing_worker(batch, save_dir, **kwargs):
             pdf_bytes = convert_pdf_bytes_to_bytes_by_pypdfium2(pdf_bytes, 0, None)
             pdf_bytes_list.append(pdf_bytes)
             pdf_name = os.path.basename(pdf_path)
-            local_image_dir = f"/mnt/data/mineru_ocr_local_image_dir/{pdf_name}"
+            local_image_dir = f"/tmp/data/mineru_ocr_local_image_dir/{pdf_name}"
             if not os.path.exists(local_image_dir):
                 os.makedirs(local_image_dir, exist_ok=True)
             local_image_dirs.append(local_image_dir)
@@ -67,7 +67,7 @@ def preprocessing_worker(batch, save_dir, **kwargs):
             # 使用None填充占位，保持列表长度一致
             pdf_bytes_list.append(None)
             pdf_name = os.path.basename(pdf_path)
-            local_image_dir = f"/mnt/data/mineru_ocr_local_image_dir/{pdf_name}"
+            local_image_dir = f"/tmp/data/mineru_ocr_local_image_dir/{pdf_name}"
             if not os.path.exists(local_image_dir):
                 os.makedirs(local_image_dir, exist_ok=True)
             local_image_dirs.append(local_image_dir)
