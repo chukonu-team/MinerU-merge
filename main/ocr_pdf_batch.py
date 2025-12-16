@@ -557,10 +557,14 @@ def postprocessing_task(gpu_result_data, **kwargs):
         if 'file_save_time' in locals():
             logging.info(f"文件保存 (JSON序列化、ZIP压缩写入): {file_save_time:.2f}秒 ({file_save_time/total_time*100:.1f}%)")
 
+        # 统计总页数
+        total_pages_processed = sum(result.get('page_count', 0) for result in final_results if result.get('success'))
+
         # 返回最终结果
         return {
             'success': True,
             'results': final_results,
+            'total_pages_processed': total_pages_processed,
             'preprocess_time': gpu_result_data.get('preprocess_time', 0),
             'image_loading_time': gpu_result_data.get('image_loading_time', 0),
             'gpu_time': gpu_result_data.get('gpu_time', 0),
@@ -798,6 +802,8 @@ class SimpleMinerUPool:
             start_time = time.time()
 
             # 等待所有任务完成
+            cumulative_files = 0
+            cumulative_pages = 0
             for _ in range(len(batches)):
                 result = self.process_pool.get_result()
                 if result:
@@ -806,7 +812,23 @@ class SimpleMinerUPool:
 
                     if status == 'success':
                         results.append(data)
+                        batch_files = 0
+                        batch_pages = 0
+
+                        # 统计这个批次中处理的文件数和页数
+                        if 'results' in data:
+                            batch_files = sum(1 for r in data['results'] if r.get('success'))
+                            batch_pages = sum(r.get('page_count', 0) for r in data['results'] if r.get('success'))
+
+                        cumulative_files += batch_files
+                        cumulative_pages += batch_pages
+
+                        elapsed_time = time.time() - start_time
                         logging.info(f"Task completed: {pdf_path}")
+                        logging.info(f"📊 累计统计: {cumulative_files} 个文件, {cumulative_pages} 页, 耗时 {elapsed_time:.1f}s ({elapsed_time/60:.1f}分钟)")
+                        if cumulative_pages > 0:
+                            logging.info(f"⚡ 平均每页耗时: {elapsed_time/cumulative_pages:.2f}s")
+
                     elif status == 'error':
                         error_result = {
                             'success': False,
@@ -820,13 +842,22 @@ class SimpleMinerUPool:
             success_count = sum(1 for r in results if r.get('success', False))
             skipped_count = sum(1 for r in results if r.get('skipped', False))
 
+            # 统计总页数
+            total_pages = 0
+            for result in results:
+                if result.get('success'):
+                    total_pages += result.get('total_pages_processed', 0)
+
             logging.info(f"\nProcessing complete!")
-            logging.info(f"Total time: {total_time:.1f} seconds")
+            logging.info(f"Total time: {total_time:.1f} seconds ({total_time/60:.1f} minutes)")
             logging.info(
                 f"Success: {success_count}, Skipped: {skipped_count}, Errors: {len(results) - success_count - skipped_count}")
+            logging.info(f"Total pages processed: {total_pages}")
 
             if success_count > 0:
                 logging.info(f"Average: {total_time / success_count:.2f} seconds per successful file")
+            if total_pages > 0:
+                logging.info(f"Average: {total_time / total_pages:.2f} seconds per page")
 
             return results
 
