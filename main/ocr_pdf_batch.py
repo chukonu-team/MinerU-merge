@@ -15,7 +15,7 @@ from mineru.data.data_reader_writer import FileBasedDataWriter
 from mineru.cli.common import read_fn, convert_pdf_bytes_to_bytes_by_pypdfium2
 
 # 导入简化的进程池
-from process_pool import SimpleProcessPool
+from main.process_pool import SimpleProcessPool
 
 logging.basicConfig(
     level=logging.INFO,

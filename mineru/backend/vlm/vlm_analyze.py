@@ -3,16 +3,22 @@ import os
 import time
 
 from loguru import logger
+from mineru.utils.enum_class import ImageType
 
-from .utils import enable_custom_logits_processors, set_default_gpu_memory_utilization, set_default_batch_size
-from .model_output_to_middle_json import result_to_middle_json
-from ...data.data_reader_writer import DataWriter
+from mineru.backend.vlm.model_output_to_middle_json import result_to_middle_json
+
+from mineru.data.data_reader_writer import DataWriter
+
+from mineru.utils.check_sys_env import is_mac_os_version_supported
+
+from mineru.backend.vlm.utils import set_default_batch_size, set_default_gpu_memory_utilization, \
+    enable_custom_logits_processors
+
+from mineru.utils.config_reader import get_device
+
+from mineru.utils.models_download_utils import auto_download_and_get_model_root_path
+
 from mineru.utils.pdf_image_tools import load_images_from_pdf
-from ...utils.check_sys_env import is_mac_os_version_supported
-from ...utils.config_reader import get_device
-
-from ...utils.enum_class import ImageType
-from ...utils.models_download_utils import auto_download_and_get_model_root_path
 
 from mineru_vl_utils import MinerUClient
 from packaging import version
