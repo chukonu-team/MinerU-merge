@@ -1,0 +1,107 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mineru-pdf-processor
+spec:
+  completions: 1100
+  parallelism: 24
+  backoffLimit: 2147483647
+  completionMode: Indexed
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: mineru-pdf-processor
+    spec:
+      runtimeClassName: nvidia
+      restartPolicy: Never
+      containers:
+      - name: mineru-processor
+        image: 10.25.4.222:5000/mineru:25100901
+        imagePullPolicy: Always
+        command: ["python3", "/data/MinerU/demo/main.py"]
+        env:
+        - name: AWS_ACCESS_KEY_ID
+          value: "****"
+        - name: AWS_SECRET_ACCESS_KEY
+          value: "****"
+        - name: AWS_DEFAULT_REGION
+          value: "cn-hangzhou"
+        - name: AWS_ENDPOINT
+          value: "http://s3.zz2stor4.paratera.com:8082"
+        - name: JOB_COMPLETION_INDEX
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['batch.kubernetes.io/job-completion-index']
+        - name: PYTHONUNBUFFERED  # 确保Python输出无缓冲
+          value: "1"
+        - name: S3_BUCKET
+          value: "batch2"
+        - name: BUCKET_TXT_KEY_PATH
+          value: "batch3/vlm/chunk_keys"
+        - name: OUTPUT_PREFIX
+          value: "batch3/vlm/output"
+        - name: GPU_IDS
+          value: "0,1,2,3,4,5,6,7"
+        - name: VRAM_SIZE_GB
+          value: "32"
+        - name: WORKERS_PER_GPU
+          value: "4"
+        - name: SHUFFLE
+          value: "false"
+        - name: MAX_PAGES
+          value: "1000"
+        - name: OFFSET
+          value: "0"
+        - name: BATCH_SIZE
+          value: "384"
+        - name: BACKEND
+          value: "vllm-engine"
+        - name: MINERU_MODEL_SOURCE
+          value: "local"
+        - name: GPU_MEMORY_UTILIZATION
+          value: "0.1"
+        - name: VLLM_USE_V1    # blackwell 架构配置1，当出现不兼容如T4，设置为0
+          value: "1"
+        - name: S3_TYPY
+          value: "s3"
+        - name: PROPORTION
+          value: "0.03"
+        - name: TORCHDYNAMO_VERBOSE
+          value: "1"
+        - name: TORCH_LOGS
+          value: "+dynamo"
+        - name: MINERU_TOOLS_CONFIG_JSON
+          value: "/data/MinerU/mineru.json"
+        - name: OMP_NUM_THREADS
+          value: "3"
+        - name: MKL_NUM_THREADS
+          value: "3"
+        - name: OPENBLAS_NUM_THREADS
+          value: "3"
+        resources:
+          limits:
+            nvidia.com/gpu: 8
+            memory: "2500Gi"
+            cpu: "120"
+          requests:
+            nvidia.com/gpu: 8
+            memory: "2500Gi"
+            cpu: "120"
+        volumeMounts:
+        - name: scripts
+          mountPath: /data/MinerU
+        - name: tmp
+          mountPath: /tmp
+        securityContext:
+          privileged: true
+      volumes:
+      - name: scripts
+        hostPath: 
+          path: /data/MinerU
+      - name: tmp
+        emptyDir:
+          medium: Memory
+          sizeLimit: "2000Gi"
+      nodeSelector:
+        accelerator: nvidia-gpu

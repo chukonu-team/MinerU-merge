@@ -3,16 +3,22 @@ import os
 import time
 
 from loguru import logger
+from mineru.utils.enum_class import ImageType
 
-from .utils import enable_custom_logits_processors, set_default_gpu_memory_utilization, set_default_batch_size
-from .model_output_to_middle_json import result_to_middle_json
-from ...data.data_reader_writer import DataWriter
+from mineru.backend.vlm.model_output_to_middle_json import result_to_middle_json
+
+from mineru.data.data_reader_writer import DataWriter
+
+from mineru.utils.check_sys_env import is_mac_os_version_supported
+
+from mineru.backend.vlm.utils import set_default_batch_size, set_default_gpu_memory_utilization, \
+    enable_custom_logits_processors
+
+from mineru.utils.config_reader import get_device
+
+from mineru.utils.models_download_utils import auto_download_and_get_model_root_path
+
 from mineru.utils.pdf_image_tools import load_images_from_pdf
-from ...utils.check_sys_env import is_mac_os_version_supported
-from ...utils.config_reader import get_device
-
-from ...utils.enum_class import ImageType
-from ...utils.models_download_utils import auto_download_and_get_model_root_path
 
 from mineru_vl_utils import MinerUClient
 from packaging import version
@@ -134,6 +140,30 @@ class ModelSingleton:
         return self._models[key]
 
 
+def doc_analyze_with_images(
+    images_list,
+    pdf_doc,
+    image_writer: DataWriter | None,
+    predictor: MinerUClient | None = None,
+    backend="transformers",
+    model_path: str | None = None,
+    server_url: str | None = None,
+    **kwargs,
+):
+    if predictor is None:
+        predictor = ModelSingleton().get_model(backend, model_path, server_url, **kwargs)
+
+    images_pil_list = [image_dict["img_pil"] for image_dict in images_list]
+
+    # infer_start = time.time()
+    results = predictor.batch_two_step_extract(images=images_pil_list)
+    # infer_time = round(time.time() - infer_start, 2)
+    # logger.info(f"infer finished, cost: {infer_time}, speed: {round(len(results)/infer_time, 3)} page/s")
+
+    middle_json = result_to_middle_json(results, images_list, pdf_doc, image_writer)
+    return middle_json, results
+
+
 def doc_analyze(
     pdf_bytes,
     image_writer: DataWriter | None,
@@ -159,6 +189,183 @@ def doc_analyze(
 
     middle_json = result_to_middle_json(results, images_list, pdf_doc, image_writer)
     return middle_json, results
+
+
+def batch_doc_analyze(
+        pdf_bytes_list,
+        image_writer_list,
+        predictor: MinerUClient | None = None,
+        backend="transformers",
+        model_path: str | None = None,
+        server_url: str | None = None,
+        **kwargs,
+):
+    if predictor is None:
+        predictor = ModelSingleton().get_model(backend, model_path, server_url, **kwargs)
+
+    # load_images_start = time.time()
+    all_images_list = []
+    all_pdf_docs = []
+    images_count_per_pdf = []  # 记录每个PDF的图像数量
+    pdf_processing_status = []  # 记录每个PDF的处理状态
+
+    # 遍历所有PDF文档，加载图像并拼接
+    for pdf_bytes in pdf_bytes_list:
+        try:
+            images_list, pdf_doc = load_images_from_pdf(pdf_bytes, image_type=ImageType.PIL)
+            all_images_list.extend(images_list)
+            all_pdf_docs.append(pdf_doc)
+            images_count_per_pdf.append(len(images_list))
+            pdf_processing_status.append(True)  # 标记为成功处理
+        except Exception as e:
+            # 捕获load_images_from_pdf异常，记录失败状态
+            logger.warning(f"Failed to load images from PDF: {e}")
+            # 不添加空列表到all_images_list，因为后面会通过images_count_per_pdf来正确处理
+            all_pdf_docs.append(None)   # 添加None作为pdf_doc
+            images_count_per_pdf.append(0)  # 图像数量为0
+            pdf_processing_status.append(False)  # 标记为处理失败
+
+    # 正确生成images_pil_list，只处理有效的图像
+    images_pil_list = []
+    for image_dict in all_images_list:
+        if image_dict and isinstance(image_dict, dict) and "img_pil" in image_dict:
+            images_pil_list.append(image_dict["img_pil"])
+
+    # 如果没有有效的图像，直接返回空结果
+    if not images_pil_list:
+        return [None] * len(pdf_bytes_list), []
+
+    # load_images_time = round(time.time() - load_images_start, 2)
+    # logger.info(f"load images cost: {load_images_time}, speed: {round(len(images_base64_list)/load_images_time, 3)} images/s")
+
+    # infer_start = time.time()
+    results = predictor.batch_two_step_extract(images=images_pil_list)
+    # infer_time = round(time.time() - infer_start, 2)
+    # logger.info(f"infer finished, cost: {infer_time}, speed: {round(len(results)/infer_time, 3)} page/s")
+
+    # 需要为每个PDF文档分别生成middle_json
+    all_middle_json = []
+    image_idx = 0
+
+    for i, (pdf_doc, is_success) in enumerate(zip(all_pdf_docs, pdf_processing_status)):
+        if not is_success or pdf_doc is None:
+            # 对于处理失败的PDF，返回None
+            all_middle_json.append(None)
+            continue
+
+        # 获取当前PDF的图像数量
+        current_pdf_images_count = images_count_per_pdf[i]
+
+        if current_pdf_images_count == 0:
+            # 对于没有图像的PDF，返回None
+            all_middle_json.append(None)
+            continue
+
+        # 获取当前PDF的图像列表和结果
+        current_images_list = all_images_list[image_idx: image_idx + current_pdf_images_count]
+        current_results = results[image_idx: image_idx + current_pdf_images_count]
+
+        # 为当前PDF生成middle_json
+        image_writer = image_writer_list[i] if i < len(image_writer_list) else None
+        middle_json = result_to_middle_json(current_results, current_images_list, pdf_doc, image_writer)
+        all_middle_json.append(middle_json)
+
+        # 更新图像索引
+        image_idx += current_pdf_images_count
+
+    return all_middle_json, results
+
+
+def batch_doc_analyze_with_images(
+        images_lists,
+        pdf_docs,
+        image_writer_list,
+        predictor: MinerUClient | None = None,
+        backend="transformers",
+        model_path: str | None = None,
+        server_url: str | None = None,
+        **kwargs,
+):
+    if predictor is None:
+        predictor = ModelSingleton().get_model(backend, model_path, server_url, **kwargs)
+
+    # 处理输入参数
+    if len(images_lists) != len(pdf_docs):
+        raise ValueError("images_lists and pdf_docs must have the same length")
+
+    if len(image_writer_list) != len(images_lists):
+        # 如果image_writer_list长度不匹配，使用None填充
+        image_writer_list = image_writer_list + [None] * (len(images_lists) - len(image_writer_list))
+
+    # 合并所有图像列表
+    all_images_list = []
+    images_count_per_pdf = []  # 记录每个PDF的图像数量
+    pdf_processing_status = []  # 记录每个PDF的处理状态
+
+    # 遍历所有PDF文档，收集图像信息
+    for i, (images_list, pdf_doc) in enumerate(zip(images_lists, pdf_docs)):
+        try:
+            # 验证images_list和pdf_doc的有效性
+            if images_list is None or pdf_doc is None:
+                images_count_per_pdf.append(0)
+                pdf_processing_status.append(False)
+                continue
+
+            all_images_list.extend(images_list)
+            images_count_per_pdf.append(len(images_list))
+            pdf_processing_status.append(True)  # 标记为成功处理
+        except Exception as e:
+            # 捕获异常，记录失败状态
+            logger.warning(f"Failed to process images list for PDF {i}: {e}")
+            images_count_per_pdf.append(0)
+            pdf_processing_status.append(False)
+
+    # 正确生成images_pil_list，只处理有效的图像
+    images_pil_list = []
+    for image_dict in all_images_list:
+        if image_dict and isinstance(image_dict, dict) and "img_pil" in image_dict:
+            images_pil_list.append(image_dict["img_pil"])
+
+    # 如果没有有效的图像，直接返回空结果
+    if not images_pil_list:
+        return [None] * len(images_lists), []
+
+    # infer_start = time.time()
+    results = predictor.batch_two_step_extract(images=images_pil_list)
+    # infer_time = round(time.time() - infer_start, 2)
+    # logger.info(f"infer finished, cost: {infer_time}, speed: {round(len(results)/infer_time, 3)} page/s")
+
+    # 需要为每个PDF文档分别生成middle_json
+    all_middle_json = []
+    image_idx = 0
+
+    for i, (pdf_doc, is_success) in enumerate(zip(pdf_docs, pdf_processing_status)):
+        if not is_success or pdf_doc is None:
+            # 对于处理失败的PDF，返回None
+            all_middle_json.append(None)
+            continue
+
+        # 获取当前PDF的图像数量
+        current_pdf_images_count = images_count_per_pdf[i]
+
+        if current_pdf_images_count == 0:
+            # 对于没有图像的PDF，返回None
+            all_middle_json.append(None)
+            continue
+
+        # 获取当前PDF的图像列表和结果
+        current_images_list = all_images_list[image_idx: image_idx + current_pdf_images_count]
+        current_results = results[image_idx: image_idx + current_pdf_images_count]
+
+        # 为当前PDF生成middle_json
+        image_writer = image_writer_list[i] if i < len(image_writer_list) else None
+        middle_json = result_to_middle_json(current_results, current_images_list, pdf_doc, image_writer)
+        all_middle_json.append(middle_json)
+
+        # 更新图像索引
+        image_idx += current_pdf_images_count
+
+    return all_middle_json, results
 
 
 async def aio_doc_analyze(
