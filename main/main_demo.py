@@ -18,8 +18,10 @@ def process():
     import os
     os.environ["GPU_MEMORY_UTILIZATION"] = "0.5"  # 降低到30%
     os.environ["BACKEND"] = "vllm-engine"  # 使用transformers后端代替vLLM
+    # os.environ["MY_VLLM_PROFILING_STATISTICS_DISPLAY_TO_STDOUT"] = "0"
+    # os.environ["MY_VLLM_PROFILING_STATISTICS_PATH"] = "profiling_statitics.json"
 
-    pdf_dir = "/home/ubuntu/MinerU-merge/demo/pdfs"  # 输入目录
+    pdf_dir = "/home/ubuntu/mineru_2.6_workspace/ghp/MinerU-merge/demo/pdfs"  # 输入目录
     # pdf_dir = "/home/ubuntu/OpenDataLab___OmniDocBench/pdfs/pdfs"
     output_dir = "/tmp/result"  # 输出目录
 
