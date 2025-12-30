@@ -237,6 +237,8 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
         gpu_memory_utilization = os.environ.get("GPU_MEMORY_UTILIZATION",0.5)
         if 'gpu_id' in filtered_kwargs:
             del filtered_kwargs['gpu_id']  # vLLM不支持gpu_id参数
+        if int(os.environ.get("MY_VLLM_COMPILATION_LEVEL", "-1")) == 0:
+            filtered_kwargs["compilation_config"] = 0
 
         from mineru.backend.vlm.vlm_analyze import ModelSingleton
 
