@@ -13,7 +13,7 @@ import traceback
 import logging
 
 from main.event import GET_PDF_PAGE_COUNT_FAILED, \
-    GPU_PROCESS_FAILED, PROCESS_SUCCESS, SAVE_FILE_FAILED
+    GPU_PROCESS_FAILED, PROCESS_SUCCESS, SAVE_FILE_FAILED, LOAD_IMAGES_FAILED
 from main.kafka_producer import report_kafka
 from mineru.data.data_reader_writer import FileBasedDataWriter
 from mineru.cli.common import read_fn, convert_pdf_bytes_to_bytes_by_pypdfium2
@@ -165,7 +165,21 @@ def preprocessing_worker(batch, save_dir, **kwargs):
     logging.info(f"过滤结果: 成功 {successful_count}/{total_count} 个PDF，有效图像数: {len(valid_all_images_list)}")
     if successful_count < total_count:
         failed_indices = [i for i, status in enumerate(pdf_processing_status) if not status]
-        failed_files = [os.path.basename(pdf_paths[i]) for i in failed_indices]
+        failed_files = [pdf_paths[i] for i in failed_indices]
+        for failed_file in failed_files:
+            data = {"event_time": int(time.time() * 1000),
+                    "cluster": CLUSTER,
+                    "pod": POD_NAME,
+                    "namespace": POD_NAMESPACE,
+                    "node": NODE_NAME,
+                    "project": PROJECT,
+                    "event": LOAD_IMAGES_FAILED,
+                    "file": failed_file,
+                    "page_count": 0,
+                    "input_file_size": os.path.getsize(failed_file),
+                    "result_file_size": 0,
+                    "failure_reason": "no valid images available"}
+            report_kafka(data)
         logging.warning(f"跳过的文件: {failed_files}")
 
     # 返回过滤后的预处理数据（只包含成功的PDF）
