@@ -11,6 +11,10 @@ import copy
 import zipfile
 import traceback
 import logging
+
+from main.event import GET_PDF_PAGE_COUNT_FAILED, \
+    GPU_PROCESS_FAILED, PROCESS_SUCCESS, SAVE_FILE_FAILED
+from main.kafka_producer import report_kafka
 from mineru.data.data_reader_writer import FileBasedDataWriter
 from mineru.cli.common import read_fn, convert_pdf_bytes_to_bytes_by_pypdfium2
 
@@ -22,8 +26,14 @@ logging.basicConfig(
     format="%(asctime)s [PID:%(process)d][%(thread)d] %(levelname)s: %(message)s"
 )
 
+CLUSTER = os.getenv("CLUSTER", "unknown")
+POD_NAME = os.getenv("POD_NAME", "unknown")
+POD_NAMESPACE = os.getenv("POD_NAMESPACE", "unknown")
+NODE_NAME = os.getenv("NODE_NAME", "unknown")
+PROJECT = os.getenv("PROJECT", "unknown")
 
-def get_pdf_page_count(pdf_path):
+
+def get_pdf_page_count(pdf_path, report_kafka=False):
     """使用fitz获取PDF页数"""
     try:
         import fitz  # PyMuPDF
@@ -33,6 +43,20 @@ def get_pdf_page_count(pdf_path):
         return page_count
     except Exception as e:
         logging.warning(f"Error getting page count for {pdf_path}: {e}")
+        if report_kafka:
+            data = {"event_time": int(time.time() * 1000),
+                    "cluster": CLUSTER,
+                    "pod": POD_NAME,
+                    "namespace": POD_NAMESPACE,
+                    "node": NODE_NAME,
+                    "project": PROJECT,
+                    "event": GET_PDF_PAGE_COUNT_FAILED,
+                    "file": pdf_path,
+                    "page_count": 0,
+                    "input_file_size": os.path.getsize(pdf_path),
+                    "result_file_size": 0,
+                    "failure_reason": f"{e}: {traceback.format_exc()}"}
+            report_kafka(data)
         return 0
 
 
@@ -62,8 +86,7 @@ def preprocessing_worker(batch, save_dir, **kwargs):
                 os.makedirs(local_image_dir, exist_ok=True)
             local_image_dirs.append(local_image_dir)
         except Exception as e:
-            logging.warning(f"加载 {pdf_path} 失败: {e}")
-            traceback.print_exc()
+            logging.warning(f"加载 {pdf_path} 失败: {e}\n {traceback.format_exc()}")
             # 使用None填充占位，保持列表长度一致
             pdf_bytes_list.append(None)
             pdf_name = os.path.basename(pdf_path)
@@ -285,8 +308,7 @@ def gpu_processing_task_with_preloaded_images(preprocessed_data, **kwargs):
 
     except Exception as e:
         error_time = time.time() - start
-        logging.error(f"GPU处理阶段1失败: {e}")
-        traceback.print_exc()
+        logging.error(f"GPU处理阶段1失败: {e} \n{traceback.format_exc()}")
         # 即使GPU处理失败，也要返回错误信息给后处理阶段处理
         return {
             'success': False,
@@ -494,10 +516,36 @@ def postprocessing_task(gpu_result_data, **kwargs):
                         'success': True
                     }
                     logging.info(f"  步骤2.7 - 创建成功结果: {target_file}")
+                    data = {"event_time": int(time.time() * 1000),
+                            "cluster": CLUSTER,
+                            "pod": POD_NAME,
+                            "namespace": POD_NAMESPACE,
+                            "node": NODE_NAME,
+                            "project": PROJECT,
+                            "event": PROCESS_SUCCESS,
+                            "file": pdf_path,
+                            "page_count": page_count,
+                            "input_file_size": os.path.getsize(pdf_path),
+                            "result_file_size": file_size,
+                            "failure_reason": None}
+                    report_kafka(data)
 
                 except Exception as save_error:
                     logging.error(f"  ❌ 文件保存过程中发生错误: {save_error}")
                     logging.error(f"  详细错误堆栈:\n{traceback.format_exc()}")
+                    data = {"event_time": int(time.time() * 1000),
+                            "cluster": CLUSTER,
+                            "pod": POD_NAME,
+                            "namespace": POD_NAMESPACE,
+                            "node": NODE_NAME,
+                            "project": PROJECT,
+                            "event": SAVE_FILE_FAILED,
+                            "file": pdf_path,
+                            "page_count": 0,
+                            "input_file_size": os.path.getsize(pdf_path),
+                            "result_file_size": 0,
+                            "failure_reason": f"{save_error}: {traceback.format_exc()}"}
+                    report_kafka(data)
 
                     # 步骤2.8: 创建失败结果
                     result = {
@@ -514,6 +562,19 @@ def postprocessing_task(gpu_result_data, **kwargs):
                     failure_reason = f'GPU processing failed: {gpu_error}'
 
                 logging.warning(f"  无法保存文件: {failure_reason}")
+                data = {"event_time": int(time.time() * 1000),
+                        "cluster": CLUSTER,
+                        "pod": POD_NAME,
+                        "namespace": POD_NAMESPACE,
+                        "node": NODE_NAME,
+                        "project": PROJECT,
+                        "event": GPU_PROCESS_FAILED,
+                        "file": pdf_path,
+                        "page_count": 0,
+                        "input_file_size": os.path.getsize(pdf_path),
+                        "result_file_size": 0,
+                        "failure_reason": gpu_error}
+                report_kafka(data)
                 result = {
                     'input_path': pdf_path,
                     'output_path': None,
@@ -656,7 +717,7 @@ def create_batches_by_pages(pdf_files, batch_size, output_path, max_pages_per_pd
     logging.info(f"📦 按页数分批 (每批最多 {batch_size} 页):")
 
     for i, pdf_file in enumerate(pdf_files):
-        page_count = get_pdf_page_count(pdf_file)
+        page_count = get_pdf_page_count(pdf_file, True)
 
         if page_count > max_pages_per_pdf:
             continue

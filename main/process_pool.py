@@ -52,7 +52,7 @@ def _preprocessing_worker(worker_id: int, preprocessing_queue: mp.Queue,
 
             # 将预处理后的任务放入GPU任务队列
             # 现在使用gpu_processing_task_with_preloaded_images作为GPU函数（只做推理部分）
-            from ocr_pdf_batch import gpu_processing_task_with_preloaded_images
+            from main.ocr_pdf_batch import gpu_processing_task_with_preloaded_images
             preprocessed_task = (task_id, gpu_processing_task_with_preloaded_images, (preprocessed_result,), kwargs)
             gpu_task_queue.put(preprocessed_task)
             print(f"Preprocessing worker {worker_id} queued task {task_id} for GPU processing")
@@ -202,7 +202,7 @@ def _worker_process(worker_id: int, gpu_id: int, gpu_task_queue: mp.Queue,
                 print(f"Worker {worker_id} completed GPU task {task_id}")
 
                 # 将GPU处理结果提交给后处理队列
-                from ocr_pdf_batch import postprocessing_task
+                from main.ocr_pdf_batch import postprocessing_task
                 postprocessing_task_data = (task_id, postprocessing_task, (gpu_result,), kwargs)
                 postprocessing_queue.put(postprocessing_task_data)
                 print(f"Worker {worker_id} queued task {task_id} for postprocessing")
@@ -253,7 +253,7 @@ def _worker_process(worker_id: int, gpu_id: int, gpu_task_queue: mp.Queue,
                         'total_time': 0
                     }
 
-                from ocr_pdf_batch import postprocessing_task
+                from main.ocr_pdf_batch import postprocessing_task
                 postprocessing_task_data = (task_id, postprocessing_task, (error_result,), kwargs)
                 postprocessing_queue.put(postprocessing_task_data)
                 print(f"Worker {worker_id} queued failed task {task_id} for postprocessing")
