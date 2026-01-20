@@ -11,3 +11,7 @@ start-api-container:
 		-v /home/ubuntu/MinerU-merge:/data/MinerU \
 		-v /home/ubuntu/articles:/data/articles \
         mineru-api-server:latest bash
+run-scheduler:
+	python3 tasks/scheduler.py > scheduler.log 2>&1
+run-pipeline:
+	python3 tasks/pipeline.py > pipeline.log 2>&1
