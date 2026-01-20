@@ -25,7 +25,7 @@ system_prompt = "You are a helpful assistant."
 _layout_re = r"^<\|box_start\|>(\d+)\s+(\d+)\s+(\d+)\s+(\d+)<\|box_end\|><\|ref_start\|>(\w+?)<\|ref_end\|>(.*)$"
 max_image_edge_ratio=50
 min_image_edge=28
-
+MODEL_PATH="/opt/modelscope/hub/OpenDataLab/MinerU2___5-2509-1___2B"
 DEFAULT_SAMPLING_PARAMS: dict[str, MinerUSamplingParams] = {
     "table": MinerUSamplingParams(presence_penalty=1.0, frequency_penalty=0.005),
     "equation": MinerUSamplingParams(presence_penalty=1.0, frequency_penalty=0.05),
@@ -211,7 +211,7 @@ def load_model():
     kwargs["mm_processor_cache_gb"] = 0
     kwargs["max_num_batched_tokens"]=8192
     # kwargs["enable_prefix_caching"]=False
-    kwargs['model'] = os.environ.get("MODEL_PATH", '/opt/modelscope/hub/models/OpenDataLab/MinerU2___5-2509-1___2B')
+    kwargs['model'] = MODEL_PATH
     # kwargs["max_num_seqs"]=512
     vllm_llm = vllm.LLM(**kwargs)
     tokenizer = vllm_llm.get_tokenizer()
@@ -220,7 +220,7 @@ def load_model():
 # 异步版本的模型加载
 async def load_engine():
     engine = AsyncLLM.from_engine_args(AsyncEngineArgs(
-        model = os.environ.get("MODEL_PATH", '/opt/modelscope/hub/models/OpenDataLab/MinerU2___5-2509-1___2B'),
+        model = MODEL_PATH,
         gpu_memory_utilization=0.3,
         mm_processor_cache_gb=0,
         logits_processors=[MinerULogitsProcessor]
@@ -368,7 +368,7 @@ class ImageType:
     PIL = 'pil_img'
     BASE64 = 'base64_img'
 def load_pdfs(page):
-    pdf_dir = os.environ.get("PDF_DIR", "/data/MinerU/demo/pdfs")
+    pdf_dir = "/data/articles/cs_CL_current_200"
     pdf_files = glob.glob(os.path.join(pdf_dir, "*.pdf"))[:page]  # 获取前n个PDF
     all_images_pil_list = []
     all_image_list = []

@@ -22,10 +22,8 @@ from tasks.utils_main import (
 # ==============================
 
 def load_pdfs(page_limit):
-    from dotenv import load_dotenv
-    load_dotenv()
     """Loads PDF bytes into memory (Same as original logic)."""
-    pdf_dir = os.environ.get("PDF_DIR", "/app/google")
+    pdf_dir = "/data/articles/cs_CL_current_200"
     # Ensure directory exists or handle error
     if not os.path.exists(pdf_dir):
         print(f"[WARN] Directory {pdf_dir} not found.")
