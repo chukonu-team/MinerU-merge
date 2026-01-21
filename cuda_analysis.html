@@ -1,0 +1,959 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CUDA Performance Analysis</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #1a1a2e; color: #eee; }
+        h1 { color: #4fc3f7; border-bottom: 2px solid #4fc3f7; padding-bottom: 10px; }
+        h2 { color: #81c784; margin-top: 30px; }
+        .summary { background: #16213e; padding: 15px; border-radius: 8px; margin: 20px 0; }
+        .metric { display: inline-block; margin: 10px 20px; }
+        .metric-value { font-size: 24px; font-weight: bold; color: #4fc3f7; }
+        .metric-label { font-size: 14px; color: #aaa; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th { background: #0f3460; color: #4fc3f7; padding: 12px; text-align: left; position: sticky; top: 0; }
+        td { padding: 10px; border-bottom: 1px solid #333; }
+        tr:hover { background: #1a1a2e; }
+        .bar-container { display: flex; align-items: center; }
+        .bar { height: 20px; background: linear-gradient(90deg, #4fc3f7, #81c784); border-radius: 3px; }
+        .bar-label { margin-left: 10px; font-size: 12px; color: #aaa; }
+        .section { background: #16213e; padding: 20px; border-radius: 8px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <h1>🔥 CUDA Performance Analysis Report</h1>
+
+    <div class="summary">
+        <div class="metric">
+            <div class="metric-value">15246.42 ms</div>
+            <div class="metric-label">Total Execution Time</div>
+        </div>
+        <div class="metric">
+            <div class="metric-value">50</div>
+            <div class="metric-label">Unique Functions</div>
+        </div>
+        <div class="metric">
+            <div class="metric-value">532,799</div>
+            <div class="metric-label">Total API Calls</div>
+        </div>
+        <div class="metric">
+            <div class="metric-value">114</div>
+            <div class="metric-label">Active Threads</div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>📊 Top Functions by Total Time</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Function</th>
+                    <th>Calls</th>
+                    <th>Total (ms)</th>
+                    <th>Avg (μs)</th>
+                    <th>Min (μs)</th>
+                    <th>Max (μs)</th>
+                    <th>Visualization</th>
+                </tr>
+            </thead>
+            <tbody>
+
+                <tr>
+                    <td title="pthread_cond_wait">pthread_cond_wait</td>
+                    <td>291</td>
+                    <td>4515245.49</td>
+                    <td>15516307.51</td>
+                    <td>16.83</td>
+                    <td>254539593.78</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 100.0%"></div>
+                            <span class="bar-label">100.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="epoll_wait">epoll_wait</td>
+                    <td>29,598</td>
+                    <td>1197578.37</td>
+                    <td>40461.46</td>
+                    <td>1.00</td>
+                    <td>240585688.71</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 26.52299572976538%"></div>
+                            <span class="bar-label">26.5%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="poll">poll</td>
+                    <td>19,452</td>
+                    <td>478253.17</td>
+                    <td>24586.32</td>
+                    <td>1.00</td>
+                    <td>61111245.86</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 10.591963807694556%"></div>
+                            <span class="bar-label">10.6%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="sem_wait">sem_wait</td>
+                    <td>10,816</td>
+                    <td>209601.54</td>
+                    <td>19378.84</td>
+                    <td>12.07</td>
+                    <td>6029568.96</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 4.642085180213405%"></div>
+                            <span class="bar-label">4.6%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="sem_clockwait">sem_clockwait</td>
+                    <td>47</td>
+                    <td>16700.60</td>
+                    <td>355331.83</td>
+                    <td>45567.42</td>
+                    <td>1550303.45</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 0.36987127053824387%"></div>
+                            <span class="bar-label">0.4%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="fork">fork</td>
+                    <td>86</td>
+                    <td>7992.41</td>
+                    <td>92935.06</td>
+                    <td>6255.13</td>
+                    <td>140854.21</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 0.1770095311711406%"></div>
+                            <span class="bar-label">0.2%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="read">read</td>
+                    <td>84,436</td>
+                    <td>7322.23</td>
+                    <td>86.72</td>
+                    <td>1.00</td>
+                    <td>1095659.92</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 0.16216688283501968%"></div>
+                            <span class="bar-label">0.2%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="write">write</td>
+                    <td>15,532</td>
+                    <td>3342.34</td>
+                    <td>215.19</td>
+                    <td>1.01</td>
+                    <td>224081.79</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 0.07402346263035008%"></div>
+                            <span class="bar-label">0.1%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="pthread_cond_timedwait">pthread_cond_timedwait</td>
+                    <td>15,897</td>
+                    <td>3042.11</td>
+                    <td>191.36</td>
+                    <td>1.00</td>
+                    <td>5163.65</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 0.06737427201755423%"></div>
+                            <span class="bar-label">0.1%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="waitpid">waitpid</td>
+                    <td>3,233</td>
+                    <td>3040.92</td>
+                    <td>940.59</td>
+                    <td>1.00</td>
+                    <td>216797.74</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 0.06734786459400005%"></div>
+                            <span class="bar-label">0.1%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="send">send</td>
+                    <td>19,232</td>
+                    <td>1461.63</td>
+                    <td>76.00</td>
+                    <td>1.70</td>
+                    <td>3838.39</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 0.032370919511042255%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="stat64">stat64</td>
+                    <td>70,442</td>
+                    <td>300.20</td>
+                    <td>4.26</td>
+                    <td>1.04</td>
+                    <td>142.71</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 0.006648534457995591%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="munmap">munmap</td>
+                    <td>52,979</td>
+                    <td>234.75</td>
+                    <td>4.43</td>
+                    <td>2.79</td>
+                    <td>536.89</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 0.005199138512573091%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="lstat64">lstat64</td>
+                    <td>74,442</td>
+                    <td>218.33</td>
+                    <td>2.93</td>
+                    <td>1.53</td>
+                    <td>152.92</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 0.00483542178773699%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="mmap64">mmap64</td>
+                    <td>53,362</td>
+                    <td>169.15</td>
+                    <td>3.17</td>
+                    <td>2.19</td>
+                    <td>347.06</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 0.003746123317643412%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="open64">open64</td>
+                    <td>19,102</td>
+                    <td>146.47</td>
+                    <td>7.67</td>
+                    <td>2.37</td>
+                    <td>204.66</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 0.0032438088129213777%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="pthread_cond_signal">pthread_cond_signal</td>
+                    <td>14,044</td>
+                    <td>111.28</td>
+                    <td>7.92</td>
+                    <td>1.00</td>
+                    <td>79.58</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 0.002464640745336566%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="close">close</td>
+                    <td>16,677</td>
+                    <td>56.89</td>
+                    <td>3.41</td>
+                    <td>1.00</td>
+                    <td>3165.44</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 0.0012599078649510708%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="pthread_mutex_lock">pthread_mutex_lock</td>
+                    <td>1,727</td>
+                    <td>44.25</td>
+                    <td>25.62</td>
+                    <td>1.00</td>
+                    <td>525.97</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 0.000980056303409825%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="recv">recv</td>
+                    <td>10,701</td>
+                    <td>38.73</td>
+                    <td>3.62</td>
+                    <td>1.05</td>
+                    <td>39.40</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 0.0008577896178638529%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="fstat64">fstat64</td>
+                    <td>16,552</td>
+                    <td>21.35</td>
+                    <td>1.29</td>
+                    <td>1.00</td>
+                    <td>337.14</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 0.00047290376716376415%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="pthread_join">pthread_join</td>
+                    <td>51</td>
+                    <td>20.96</td>
+                    <td>410.93</td>
+                    <td>9.71</td>
+                    <td>3170.42</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 0.0004641501345822081%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="pipe2">pipe2</td>
+                    <td>270</td>
+                    <td>19.68</td>
+                    <td>72.88</td>
+                    <td>2.93</td>
+                    <td>17924.04</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 0.00043580596140342225%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="nanosleep">nanosleep</td>
+                    <td>2</td>
+                    <td>10.14</td>
+                    <td>5072.16</td>
+                    <td>5071.77</td>
+                    <td>5072.56</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 0.00022466836036815342%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="pthread_create">pthread_create</td>
+                    <td>77</td>
+                    <td>9.62</td>
+                    <td>124.97</td>
+                    <td>46.18</td>
+                    <td>2238.80</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 0.00021311445922109063%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="fopen64">fopen64</td>
+                    <td>389</td>
+                    <td>5.94</td>
+                    <td>15.27</td>
+                    <td>2.56</td>
+                    <td>101.56</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 0.00013151725677836278%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="fread">fread</td>
+                    <td>538</td>
+                    <td>4.50</td>
+                    <td>8.36</td>
+                    <td>1.09</td>
+                    <td>72.81</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 9.960867053501797e-05%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="ioctl">ioctl</td>
+                    <td>65</td>
+                    <td>3.61</td>
+                    <td>55.52</td>
+                    <td>1.01</td>
+                    <td>661.73</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 7.992757007758408e-05%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="epoll_ctl">epoll_ctl</td>
+                    <td>1,495</td>
+                    <td>2.91</td>
+                    <td>1.95</td>
+                    <td>1.00</td>
+                    <td>24.33</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 6.448683707289497e-05%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="sleep">sleep</td>
+                    <td>34</td>
+                    <td>1.98</td>
+                    <td>58.38</td>
+                    <td>25.01</td>
+                    <td>77.70</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 4.3957056291904155e-05%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="fclose">fclose</td>
+                    <td>757</td>
+                    <td>1.80</td>
+                    <td>2.37</td>
+                    <td>1.00</td>
+                    <td>15.22</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 3.981575322035116e-05%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="fgets">fgets</td>
+                    <td>55</td>
+                    <td>1.61</td>
+                    <td>29.34</td>
+                    <td>4.17</td>
+                    <td>198.72</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 3.5735421363066234e-05%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="fopen">fopen</td>
+                    <td>58</td>
+                    <td>0.40</td>
+                    <td>6.81</td>
+                    <td>2.88</td>
+                    <td>45.65</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 8.751639334449632e-06%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="open">open</td>
+                    <td>36</td>
+                    <td>0.30</td>
+                    <td>8.45</td>
+                    <td>3.04</td>
+                    <td>28.57</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 6.737662458067243e-06%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="pread">pread</td>
+                    <td>234</td>
+                    <td>0.25</td>
+                    <td>1.08</td>
+                    <td>1.01</td>
+                    <td>2.14</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 5.576994667966823e-06%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="bind">bind</td>
+                    <td>5</td>
+                    <td>0.15</td>
+                    <td>30.64</td>
+                    <td>8.03</td>
+                    <td>53.68</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 3.393237432492905e-06%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="fflush">fflush</td>
+                    <td>8</td>
+                    <td>0.10</td>
+                    <td>12.95</td>
+                    <td>1.24</td>
+                    <td>18.31</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 2.2936294454208372e-06%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="mmap">mmap</td>
+                    <td>4</td>
+                    <td>0.09</td>
+                    <td>23.01</td>
+                    <td>7.65</td>
+                    <td>33.88</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 2.0386931405026782e-06%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="stat">stat</td>
+                    <td>11</td>
+                    <td>0.09</td>
+                    <td>7.78</td>
+                    <td>1.64</td>
+                    <td>20.59</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 1.8945149331343169e-06%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="socket">socket</td>
+                    <td>8</td>
+                    <td>0.07</td>
+                    <td>8.75</td>
+                    <td>4.40</td>
+                    <td>14.16</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 1.5498825084247811e-06%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="close_range">close_range</td>
+                    <td>12</td>
+                    <td>0.06</td>
+                    <td>4.92</td>
+                    <td>1.04</td>
+                    <td>9.68</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 1.3073707771369836e-06%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="pthread_cond_broadcast">pthread_cond_broadcast</td>
+                    <td>4</td>
+                    <td>0.05</td>
+                    <td>13.52</td>
+                    <td>10.36</td>
+                    <td>18.88</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 1.1974985671900646e-06%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="sigaction">sigaction</td>
+                    <td>15</td>
+                    <td>0.04</td>
+                    <td>2.73</td>
+                    <td>1.10</td>
+                    <td>18.50</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 9.060415458432689e-07%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="accept4">accept4</td>
+                    <td>3</td>
+                    <td>0.03</td>
+                    <td>11.64</td>
+                    <td>8.39</td>
+                    <td>15.63</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 7.736234964031097e-07%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="fdopen">fdopen</td>
+                    <td>2</td>
+                    <td>0.03</td>
+                    <td>15.01</td>
+                    <td>2.05</td>
+                    <td>27.96</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 6.646593212491405e-07%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="fputc">fputc</td>
+                    <td>2</td>
+                    <td>0.03</td>
+                    <td>13.77</td>
+                    <td>11.76</td>
+                    <td>15.77</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 6.097121426806451e-07%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="mprotect">mprotect</td>
+                    <td>3</td>
+                    <td>0.03</td>
+                    <td>8.68</td>
+                    <td>7.94</td>
+                    <td>9.91</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 5.767128294734471e-07%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="kill">kill</td>
+                    <td>5</td>
+                    <td>0.02</td>
+                    <td>4.27</td>
+                    <td>1.03</td>
+                    <td>14.79</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 4.7306397993674465e-07%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="fputs_unlocked">fputs_unlocked</td>
+                    <td>2</td>
+                    <td>0.02</td>
+                    <td>10.59</td>
+                    <td>8.94</td>
+                    <td>12.24</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 4.690996329138664e-07%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td title="fstat">fstat</td>
+                    <td>6</td>
+                    <td>0.02</td>
+                    <td>3.08</td>
+                    <td>1.12</td>
+                    <td>8.62</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar" style="width: 4.095015444302625e-07%"></div>
+                            <span class="bar-label">0.0%</span>
+                        </div>
+                    </td>
+                </tr>
+
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <h2>🧵 Thread Activity</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Thread ID</th>
+                    <th>API Calls</th>
+                    <th>Total Time (ms)</th>
+                </tr>
+            </thead>
+            <tbody>
+
+                <tr>
+                    <td>288089444844621</td>
+                    <td>10</td>
+                    <td>274596.24</td>
+                </tr>
+
+                <tr>
+                    <td>288089444844611</td>
+                    <td>11</td>
+                    <td>274595.97</td>
+                </tr>
+
+                <tr>
+                    <td>288089444844619</td>
+                    <td>11</td>
+                    <td>274595.97</td>
+                </tr>
+
+                <tr>
+                    <td>288089444844618</td>
+                    <td>12</td>
+                    <td>274595.91</td>
+                </tr>
+
+                <tr>
+                    <td>288089444844620</td>
+                    <td>12</td>
+                    <td>274594.59</td>
+                </tr>
+
+                <tr>
+                    <td>288089444844610</td>
+                    <td>10</td>
+                    <td>274593.67</td>
+                </tr>
+
+                <tr>
+                    <td>288089444844616</td>
+                    <td>12</td>
+                    <td>274592.96</td>
+                </tr>
+
+                <tr>
+                    <td>288089444844613</td>
+                    <td>11</td>
+                    <td>274591.53</td>
+                </tr>
+
+                <tr>
+                    <td>288089444844617</td>
+                    <td>10</td>
+                    <td>274589.74</td>
+                </tr>
+
+                <tr>
+                    <td>288089444844612</td>
+                    <td>11</td>
+                    <td>274584.68</td>
+                </tr>
+
+                <tr>
+                    <td>288089444844615</td>
+                    <td>10</td>
+                    <td>274584.49</td>
+                </tr>
+
+                <tr>
+                    <td>288089444844609</td>
+                    <td>142</td>
+                    <td>274582.80</td>
+                </tr>
+
+                <tr>
+                    <td>288089444844614</td>
+                    <td>12</td>
+                    <td>274582.65</td>
+                </tr>
+
+                <tr>
+                    <td>288089444844623</td>
+                    <td>10</td>
+                    <td>274581.29</td>
+                </tr>
+
+                <tr>
+                    <td>288089444844622</td>
+                    <td>11</td>
+                    <td>274579.11</td>
+                </tr>
+
+                <tr>
+                    <td>288089444845132</td>
+                    <td>40</td>
+                    <td>240619.57</td>
+                </tr>
+
+                <tr>
+                    <td>288089444845131</td>
+                    <td>29</td>
+                    <td>240619.51</td>
+                </tr>
+
+                <tr>
+                    <td>288089444845133</td>
+                    <td>77,167</td>
+                    <td>240344.69</td>
+                </tr>
+
+                <tr>
+                    <td>288089444845135</td>
+                    <td>16,387</td>
+                    <td>239764.61</td>
+                </tr>
+
+                <tr>
+                    <td>288089444844557</td>
+                    <td>194,302</td>
+                    <td>237708.95</td>
+                </tr>
+
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <h2>💡 Key Insights</h2>
+        <ul>
+<li><strong>Highest Impact:</strong> pthread_cond_wait accounts for 4515245.49ms (29615.1% of total time)</li><li><strong>Slow Functions:</strong> 7 functions have average execution time > 1ms</li><li><strong>Frequent Calls:</strong> 16 functions called more than 10,000 times</li>
+        </ul>
+    </div>
+</body>
+</html>

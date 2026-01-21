@@ -207,7 +207,7 @@ def build_vllm_sampling_params(sampling_params: MinerUSamplingParams):
 def load_model():
     kwargs={}
     kwargs["logits_processors"] = [MinerULogitsProcessor]
-    kwargs["gpu_memory_utilization"] = 0.3
+    kwargs["gpu_memory_utilization"] = 0.9
     kwargs["mm_processor_cache_gb"] = 0
     kwargs["max_num_batched_tokens"]=8192
     # kwargs["enable_prefix_caching"]=False
@@ -217,6 +217,42 @@ def load_model():
     tokenizer = vllm_llm.get_tokenizer()
     return vllm_llm,tokenizer
 
+# # 异步版本的模型加载
+# async def load_engine():
+#     engine = AsyncLLM.from_engine_args(AsyncEngineArgs(
+#         model = MODEL_PATH,
+#         gpu_memory_utilization=0.3,
+#         mm_processor_cache_gb=0,
+#         logits_processors=[MinerULogitsProcessor]
+#     ))
+#     # vllm v1 的 engine.tokenizer 是 TokenizerGroup，需要从 transformers 单独加载
+#     from transformers import AutoTokenizer
+#     tokenizer = engine.tokenizer
+#     return engine, tokenizer
+
+# # 异步预测函数
+# async def aio_predict(vllm_engine, tokenizer, image, prompt, sampling_params):
+#     messages = [{"role": "system", "content": system_prompt},
+#                 {"role": "user", "content": [{"type": "image"}, {"type": "text", "text": prompt}]}]
+
+#     chat_prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+
+#     vllm_sp = SamplingParams(
+#         temperature=sampling_params.temperature,
+#         top_p=sampling_params.top_p,
+#         max_tokens=16384,
+#         output_kind=RequestOutputKind.FINAL_ONLY,
+#         skip_special_tokens=False
+#     )
+
+#     result = ""
+#     async for output in vllm_engine.generate(
+#         prompt={"prompt": chat_prompt, "multi_modal_data": {"image": image}},
+#         sampling_params=vllm_sp,
+#         request_id=f"req-{uuid.uuid4()}"
+#     ):
+#         result = output.outputs[0].text
+#     return result
 # 异步版本的模型加载
 async def load_engine():
     engine = AsyncLLM.from_engine_args(AsyncEngineArgs(
@@ -225,26 +261,42 @@ async def load_engine():
         mm_processor_cache_gb=0,
         logits_processors=[MinerULogitsProcessor]
     ))
-    # vllm v1 的 engine.tokenizer 是 TokenizerGroup，需要从 transformers 单独加载
+    # vllm v1 的 tokenizer 是 TokenizerGroup，我们需要从 transformers 单独加载
     from transformers import AutoTokenizer
-    tokenizer = engine.tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
     return engine, tokenizer
 
-# 异步预测函数
+# 异步预测函数 - 修复版本
 async def aio_predict(vllm_engine, tokenizer, image, prompt, sampling_params):
-    messages = [{"role": "system", "content": system_prompt},
-                {"role": "user", "content": [{"type": "image"}, {"type": "text", "text": prompt}]}]
-
-    chat_prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-
+    # 对于 vLLM v1，我们需要手动构建prompt格式
+    # 根据你的模型调整这个格式
+    chat_prompt = f"{system_prompt}\n\nUser: <image>\n{prompt}\n\nAssistant:"
+    
+    # 或者使用原始的消息格式
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": [{"type": "image"}, {"type": "text", "text": prompt}]}
+    ]
+    
+    # 如果模型支持chat_template，尝试使用它
+    if hasattr(tokenizer, "apply_chat_template"):
+        chat_prompt = tokenizer.apply_chat_template(
+            messages, 
+            tokenize=False, 
+            add_generation_prompt=True
+        )
+    else:
+        # 手动构建prompt格式
+        # 这取决于你的具体模型，以下是通用格式
+        chat_prompt = f"{system_prompt}\n\nUser: <image>\n{prompt}\n\nAssistant:"
+    
     vllm_sp = SamplingParams(
         temperature=sampling_params.temperature,
         top_p=sampling_params.top_p,
         max_tokens=16384,
-        output_kind=RequestOutputKind.FINAL_ONLY,
         skip_special_tokens=False
     )
-
+    
     result = ""
     async for output in vllm_engine.generate(
         prompt={"prompt": chat_prompt, "multi_modal_data": {"image": image}},
@@ -253,7 +305,6 @@ async def aio_predict(vllm_engine, tokenizer, image, prompt, sampling_params):
     ):
         result = output.outputs[0].text
     return result
-
 def batch_predict(
     vllm_llm,
     tokenizer,

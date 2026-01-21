@@ -1,0 +1,122 @@
+Generating SQLite file /data/MinerU/pipeline_nsys.sqlite from /data/MinerU/pipeline_nsys.nsys-rep
+Processing [/data/MinerU/pipeline_nsys.sqlite] with [/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/reports/nvtx_sum.py]... 
+SKIPPED: /data/MinerU/pipeline_nsys.sqlite does not contain NV Tools Extension (NVTX) data.
+
+Processing [/data/MinerU/pipeline_nsys.sqlite] with [/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/reports/osrt_sum.py]... 
+Time (%),Total Time (ns),Num Calls,Avg (ns),Med (ns),Min (ns),Max (ns),StdDev (ns),Name
+69.9,4467639532177,316,14138099785.4,206444554.0,2390,253039705381,53540877945.5,pthread_cond_wait
+18.7,1194933697848,29926,39929616.3,152477.5,1000,240264968965,2671856004.5,epoll_wait
+7.5,477067844285,19896,23978078.2,5053648.5,1000,61158928303,676006824.0,poll
+3.3,209039045753,10815,19328621.9,5753190.0,22360,5980231510,144466871.5,sem_wait
+0.3,16886001652,50,337720033.0,199053263.5,29153104,1582113557,344211840.7,sem_clockwait
+0.1,7883702055,86,91670954.1,81578360.0,922355,138089330,41430165.0,fork
+0.1,6408160363,83693,76567.5,24741.0,1000,1082179126,4389033.4,read
+0.1,3476238911,16708,208058.3,28251.0,1000,5156260,833634.9,pthread_cond_timedwait
+0.1,3318026828,15530,213652.7,9761.0,1000,219260723,5675862.0,write
+0.0,2954845353,3372,876288.7,1200.0,1000,189696463,10788375.2,waitpid
+0.0,1510335028,19458,77620.3,59881.0,1670,3869891,125762.2,send
+0.0,301340944,70442,4277.9,4120.0,1000,171293,2080.5,stat64
+0.0,234823030,52980,4432.3,3500.0,2840,281454,6280.4,munmap
+0.0,219920315,74442,2954.3,2930.0,1550,303554,1564.8,lstat64
+0.0,169593468,53362,3178.2,2790.0,2280,266854,3582.2,mmap64
+0.0,146416210,19102,7665.0,7060.0,2390,223854,6604.2,open64
+0.0,119154541,15023,7931.5,7620.0,1000,65871,4529.9,pthread_cond_signal
+0.0,63320869,2244,28217.9,23985.5,1000,383606,32171.7,pthread_mutex_lock
+0.0,35810391,10701,3346.5,3090.0,1000,36741,1580.5,recv
+0.0,22283258,18002,1237.8,1120.0,1000,90192,1402.0,fstat64
+0.0,20573389,52,395642.1,316180.0,8920,1588085,442137.7,pthread_join
+0.0,16225235,389,41710.1,4790.0,2580,10772728,545787.1,fopen64
+0.0,10142318,2,5071159.0,5071159.0,5070879,5071439,396.0,nanosleep
+0.0,7014854,77,91102.0,81801.0,47940,320235,44824.4,pthread_create
+0.0,4537428,539,8418.2,1400.0,1070,75281,16026.3,fread
+0.0,3629780,65,55842.8,7160.0,1200,653890,152059.6,ioctl
+0.0,3277758,1871,1751.9,1530.0,1000,19971,1137.1,epoll_ctl
+0.0,2057906,34,60526.6,71416.0,25511,79822,19791.9,sleep
+0.0,1806217,758,2382.9,1970.0,1000,27080,2129.5,fclose
+0.0,1750247,270,6482.4,4310.0,2880,26350,3859.3,pipe2
+0.0,1583507,55,28791.0,17670.0,3990,124521,28874.6,fgets
+0.0,364084,58,6277.3,4475.0,2930,31001,5131.3,fopen
+0.0,265306,234,1133.8,1040.0,1020,9181,615.3,pread
+0.0,216812,36,6022.6,4965.0,2420,14820,3037.5,open
+0.0,146181,5,29236.2,29110.0,7920,51520,20632.7,bind
+0.0,69942,8,8742.8,6770.5,4600,14390,4152.6,socket
+0.0,68661,5,13732.2,14031.0,8430,18440,4082.1,pthread_cond_broadcast
+0.0,65830,13,5063.8,2600.0,1090,15600,4753.2,close_range
+0.0,56191,14,4013.6,1220.0,1010,40001,10360.9,sigaction
+0.0,44960,6,7493.3,6610.0,1040,15320,7056.5,fflush
+0.0,36310,11,3300.9,3530.0,1530,7440,1668.8,stat
+0.0,30910,4,7727.5,7565.0,6040,9740,1915.9,mmap
+0.0,27130,3,9043.3,9090.0,8560,9480,461.8,accept4
+0.0,26860,2,13430.0,13430.0,11430,15430,2828.4,fputc
+0.0,19331,3,6443.7,2700.0,1000,15631,8001.7,kill
+0.0,17330,6,2888.3,1855.0,1210,9020,3024.6,statx
+0.0,17231,3,5743.7,5851.0,5510,5870,202.6,lstat
+0.0,16110,7,2301.4,1530.0,1050,6800,2051.9,fcntl
+0.0,14880,2,7440.0,7440.0,6100,8780,1895.0,connect
+0.0,13320,3,4440.0,3830.0,3770,5720,1108.9,mprotect
+0.0,8290,2,4145.0,4145.0,4120,4170,35.4,openat64
+0.0,8250,6,1375.0,1180.0,1020,2060,438.5,dup2
+0.0,7190,5,1438.0,1210.0,1160,2000,371.6,fstat
+0.0,7080,3,2360.0,2440.0,1890,2750,435.5,fwrite
+0.0,6030,2,3015.0,3015.0,3000,3030,21.2,fstatat64
+0.0,4400,2,2200.0,2200.0,2130,2270,99.0,fputs_unlocked
+0.0,3270,1,3270.0,3270.0,3270,3270,0.0,fputs
+0.0,3170,2,1585.0,1585.0,1380,1790,289.9,getc
+0.0,1900,1,1900.0,1900.0,1900,1900,0.0,getentropy
+0.0,1410,1,1410.0,1410.0,1410,1410,0.0,listen
+0.0,1020,1,1020.0,1020.0,1020,1020,0.0,fcntl64
+
+Processing [/data/MinerU/pipeline_nsys.sqlite] with [/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/reports/cuda_api_sum.py]... 
+SKIPPED: /data/MinerU/pipeline_nsys.sqlite does not contain CUDA trace data.
+
+Processing [/data/MinerU/pipeline_nsys.sqlite] with [/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/reports/cuda_gpu_kern_sum.py]... 
+SKIPPED: /data/MinerU/pipeline_nsys.sqlite does not contain CUDA kernel data.
+
+Processing [/data/MinerU/pipeline_nsys.sqlite] with [/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/reports/cuda_gpu_mem_time_sum.py]... 
+SKIPPED: /data/MinerU/pipeline_nsys.sqlite does not contain GPU memory data.
+
+Processing [/data/MinerU/pipeline_nsys.sqlite] with [/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/reports/cuda_gpu_mem_size_sum.py]... 
+SKIPPED: /data/MinerU/pipeline_nsys.sqlite does not contain GPU memory data.
+
+Processing [/data/MinerU/pipeline_nsys.sqlite] with [/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/reports/openmp_sum.py]... 
+SKIPPED: /data/MinerU/pipeline_nsys.sqlite does not contain OpenMP event data.
+
+Processing [/data/MinerU/pipeline_nsys.sqlite] with [/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/reports/opengl_khr_range_sum.py]... 
+SKIPPED: /data/MinerU/pipeline_nsys.sqlite does not contain KHR Extension (KHR_DEBUG) data.
+
+Processing [/data/MinerU/pipeline_nsys.sqlite] with [/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/reports/opengl_khr_gpu_range_sum.py]... 
+SKIPPED: /data/MinerU/pipeline_nsys.sqlite does not contain GPU KHR Extension (KHR_DEBUG) data.
+
+Processing [/data/MinerU/pipeline_nsys.sqlite] with [/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/reports/vulkan_marker_sum.py]... 
+SKIPPED: /data/MinerU/pipeline_nsys.sqlite does not contain Vulkan Debug Extension (Vulkan Debug Util) data.
+
+Processing [/data/MinerU/pipeline_nsys.sqlite] with [/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/reports/vulkan_gpu_marker_sum.py]... 
+SKIPPED: /data/MinerU/pipeline_nsys.sqlite does not contain GPU Vulkan Debug Extension (GPU Vulkan Debug markers) data.
+
+Processing [/data/MinerU/pipeline_nsys.sqlite] with [/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/reports/dx11_pix_sum.py]... 
+SKIPPED: /data/MinerU/pipeline_nsys.sqlite does not contain DX11 CPU debug markers.
+
+Processing [/data/MinerU/pipeline_nsys.sqlite] with [/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/reports/dx12_gpu_marker_sum.py]... 
+SKIPPED: /data/MinerU/pipeline_nsys.sqlite does not contain DX12 GPU debug markers.
+
+Processing [/data/MinerU/pipeline_nsys.sqlite] with [/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/reports/dx12_pix_sum.py]... 
+SKIPPED: /data/MinerU/pipeline_nsys.sqlite does not contain DX12 CPU debug markers.
+
+Processing [/data/MinerU/pipeline_nsys.sqlite] with [/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/reports/wddm_queue_sum.py]... 
+SKIPPED: /data/MinerU/pipeline_nsys.sqlite does not contain WDDM context data.
+
+Processing [/data/MinerU/pipeline_nsys.sqlite] with [/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/reports/um_sum.py]... 
+SKIPPED: /data/MinerU/pipeline_nsys.sqlite does not contain CUDA memory transfers data.
+
+Processing [/data/MinerU/pipeline_nsys.sqlite] with [/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/reports/um_total_sum.py]... 
+SKIPPED: /data/MinerU/pipeline_nsys.sqlite does not contain CUDA memory transfers data.
+
+Processing [/data/MinerU/pipeline_nsys.sqlite] with [/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/reports/um_cpu_page_faults_sum.py]... 
+SKIPPED: /data/MinerU/pipeline_nsys.sqlite does not contain CUDA Unified Memory CPU page faults data.
+
+Processing [/data/MinerU/pipeline_nsys.sqlite] with [/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/reports/openacc_sum.py]... 
+SKIPPED: /data/MinerU/pipeline_nsys.sqlite does not contain OpenACC event data.
+
+Processing [/data/MinerU/pipeline_nsys.sqlite] with [/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/reports/syscall_sum.py]... 
+SKIPPED: /data/MinerU/pipeline_nsys.sqlite does not contain syscall data.
+

@@ -1,6 +1,7 @@
 from tasks.util_layout_dect import batch_prepare_for_layout, MinerUSamplingParams
 import time
 from tasks.utils_main import parse_layout_output,load_model,batch_predict,collect_image_for_extract,load_pdfs,batch_post_process,self_post_process
+import nvtx  # 引入库
 
 def batch_layout_detect(
     vllm_llm,tokenizer,
@@ -33,8 +34,6 @@ def compute_page_indices(images_count_per_pdf):
     return result
 
 def main_func(save_dir=None):
-    from dotenv import load_dotenv
-    load_dotenv()
     vllm_llm,tokenizer = load_model()
 
     b1=time.time()
@@ -46,13 +45,16 @@ def main_func(save_dir=None):
 
     # 计算每个页面索引对应的(pdf_idx, page_idx)
     page_indices = compute_page_indices(images_count_per_pdf)
-
-    outputs = batch_layout_detect(vllm_llm,tokenizer,layout_images)
+    with nvtx.annotate("Layout Detect Phase", color="blue"):
+        outputs = batch_layout_detect(vllm_llm, tokenizer, layout_images)
+    
     mid_time1= time.time()
-    all_images,all_params, all_prompts,all_indices,blocks_list = batch_inter_process(outputs,all_images_pil_list)
+    with nvtx.annotate("CPU Inter Process", color="green"):
+        all_images,all_params, all_prompts,all_indices,blocks_list = batch_inter_process(outputs,all_images_pil_list)
     mid_time2= time.time()
     priority= None
-    outputs = batch_predict(vllm_llm,tokenizer,all_images,all_params, all_prompts, priority)
+    with nvtx.annotate("Extract/Predict Phase", color="red"):
+        outputs = batch_predict(vllm_llm,tokenizer,all_images,all_params, all_prompts, priority)
     for (img_idx, idx), output in zip(all_indices, outputs):
         blocks_list[img_idx][idx].content = output
     end=time.time()

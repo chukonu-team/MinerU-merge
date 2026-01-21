@@ -1,17 +1,43 @@
-run-pipeline:
-	/home/ubuntu/MinerU-merge/venv/bin/python demo/demo.py 
-run-vlm:
-	/home/ubuntu/MinerU-merge/venv/bin/python demo/vlm.py 
-run-consumer:
-	/home/ubuntu/MinerU-merge/venv/bin/python demo/consumer.py --pdf-dir /home/ubuntu/MinerU-merge/demo/pdfs --output-dir /home/ubuntu/MinerU-merge/demo/output
 start-api-container:
 	docker run --privileged -itd --name mineru-api-server \
 		--gpus all \
 		-p 8001:8001 \
 		-v /home/ubuntu/MinerU-merge:/data/MinerU \
 		-v /home/ubuntu/articles:/data/articles \
-        mineru-api-server:latest bash
+	mineru-api-server:latest bash
 run-scheduler:
 	python3 tasks/scheduler.py > scheduler.log 2>&1
 run-pipeline:
 	python3 tasks/pipeline.py > pipeline.log 2>&1
+profile-pipeline:
+	ncu --set full -o pipeline_profile python3 tasks/pipeline.py > pipeline.log 2>&1
+exportto-html:
+	ncu-ui pipeline_profile.ncu-rep
+profile-basic:
+	ncu --set basics -o pipeline_profile_fast python3 tasks/pipeline.py  > pipeline_basic.log 2>&1
+profile-pipeline-essential:
+	ncu --metrics sm__pipe_tensor_cycles_active.avg.pct_of_peak:sat4_activity,sm__sass_thread_inst_executed_op_* -o pipeline_profile_essential python3 tasks/pipeline.py > pipeline.log 2>&1
+profile-bandwidth:
+	ncu --metrics dram__throughput.avg.pct_of_peak,dram__bytes_read.sum,dram__bytes_written.sum,lts__throughput.avg.pct_of_peak -o pipeline_profile_bandwidth python3 tasks/pipeline.py > pipeline_bandwidth.log 2>&1
+monitor-gpu:
+	nvidia-smi dmon -s puct -d 1
+profile-nsys:
+	nsys profile --trace=cuda,nvtx,osrt --force-overwrite=true -o pipeline_nsys python3 tasks/pipeline.py > pipeline_nsys.log 2>&1
+profile-nsys-30s:
+	nsys profile --trace=cuda,nvtx,osrt --duration=30 --force-overwrite=true -o pipeline_nsys_30s python3 tasks/pipeline.py > pipeline_nsys_30s.log 2>&1
+feel:
+	nsys profile \
+	--trace=cuda,nvtx,osrt,cudnn,cublas \
+	--gpu-metrics-devices=all \
+	--cuda-memory-usage=true \
+	--python-sampling=true \
+	--output=pipeline_report \
+	python3 tasks/pipeline.py > feel.log 2>&1
+sfeel:
+	nsys profile \
+	--trace=cuda,nvtx,osrt,cudnn,cublas \
+	--gpu-metrics-devices=all \
+	--cuda-memory-usage=true \
+	--python-sampling=true \
+	--output=async_pipeline_report \
+	python3 tasks/scheduler.py > sfeel.log 2>&1

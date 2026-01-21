@@ -155,7 +155,7 @@ async def process_single_page(
 
 async def main_func(save_dir="./result/one_tasks/async_scheduler_save"):
     # Hardware settings
-    os.environ["OMP_NUM_THREADS"] = "4" # Don't set too low, but keep away from all cores
+    os.environ["OMP_NUM_THREADS"] = "16" # Don't set too low, but keep away from all cores
     
     # 1. Load Engine
     print("Initializing Engine...")
@@ -172,11 +172,11 @@ async def main_func(save_dir="./result/one_tasks/async_scheduler_save"):
     # 3. Setup Concurrency
     # sem_layout: Controls how many pages are doing Layout Detection simultaneously.
     # High number = better batching, but higher VRAM usage.
-    sem_layout = asyncio.Semaphore(32) 
+    sem_layout = asyncio.Semaphore(128) 
     
     # sem_extract: Controls how many small image blocks are being recognized simultaneously.
     # Can be higher as inputs are smaller.
-    sem_extract = asyncio.Semaphore(64) 
+    sem_extract = asyncio.Semaphore(128) 
 
     start_time = time.time()
 
