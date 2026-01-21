@@ -155,7 +155,7 @@ async def process_single_page(
 
 async def main_func(save_dir="./result/one_tasks/async_scheduler_save"):
     # Hardware settings
-    os.environ["OMP_NUM_THREADS"] = "16" # Don't set too low, but keep away from all cores
+    os.environ["OMP_NUM_THREADS"] = "4" # Don't set too low, but keep away from all cores
     
     # 1. Load Engine
     print("Initializing Engine...")
@@ -164,7 +164,7 @@ async def main_func(save_dir="./result/one_tasks/async_scheduler_save"):
     # 2. Load Data
     b1 = time.time()
     # Load first 2 PDFs (as per your example)
-    all_images_bytes, pdf_files, counts = load_pdfs(4) 
+    all_images_bytes, pdf_files, counts = load_pdfs(20) 
     page_indices = get_page_indices(counts)
     b2 = time.time()
     print(f"Data loaded in {b2-b1:.2f}s. Total pages: {len(all_images_bytes)}")
@@ -176,7 +176,7 @@ async def main_func(save_dir="./result/one_tasks/async_scheduler_save"):
     
     # sem_extract: Controls how many small image blocks are being recognized simultaneously.
     # Can be higher as inputs are smaller.
-    sem_extract = asyncio.Semaphore(128) 
+    sem_extract = asyncio.Semaphore(512) 
 
     start_time = time.time()
 

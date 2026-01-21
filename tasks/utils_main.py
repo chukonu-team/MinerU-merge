@@ -257,8 +257,9 @@ def load_model():
 async def load_engine():
     engine = AsyncLLM.from_engine_args(AsyncEngineArgs(
         model = MODEL_PATH,
-        gpu_memory_utilization=0.3,
+        gpu_memory_utilization=0.8,
         mm_processor_cache_gb=0,
+        max_num_seqs=512,
         logits_processors=[MinerULogitsProcessor]
     ))
     # vllm v1 的 tokenizer 是 TokenizerGroup，我们需要从 transformers 单独加载
