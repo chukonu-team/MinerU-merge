@@ -25,7 +25,7 @@ system_prompt = "You are a helpful assistant."
 _layout_re = r"^<\|box_start\|>(\d+)\s+(\d+)\s+(\d+)\s+(\d+)<\|box_end\|><\|ref_start\|>(\w+?)<\|ref_end\|>(.*)$"
 max_image_edge_ratio=50
 min_image_edge=28
-MODEL_PATH="/opt/modelscope/hub/OpenDataLab/MinerU2___5-2509-1___2B"
+MODEL_PATH="/opt/modelscope/hub/models/OpenDataLab/MinerU2___5-2509-1___2B"
 DEFAULT_SAMPLING_PARAMS: dict[str, MinerUSamplingParams] = {
     "table": MinerUSamplingParams(presence_penalty=1.0, frequency_penalty=0.005),
     "equation": MinerUSamplingParams(presence_penalty=1.0, frequency_penalty=0.05),
@@ -419,7 +419,7 @@ class ImageType:
     PIL = 'pil_img'
     BASE64 = 'base64_img'
 def load_pdfs(page):
-    pdf_dir = "/data/articles/cs_CL_current_200"
+    pdf_dir = "/data/google"
     pdf_files = glob.glob(os.path.join(pdf_dir, "*.pdf"))[:page]  # 获取前n个PDF
     all_images_pil_list = []
     all_image_list = []

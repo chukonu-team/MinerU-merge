@@ -23,7 +23,7 @@ from tasks.utils_main import (
 
 def load_pdfs(page_limit):
     """Loads PDF bytes into memory (Same as original logic)."""
-    pdf_dir = "/data/articles/cs_CL_current_200"
+    pdf_dir = "/data/google"
     # Ensure directory exists or handle error
     if not os.path.exists(pdf_dir):
         print(f"[WARN] Directory {pdf_dir} not found.")
