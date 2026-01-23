@@ -1,0 +1,146 @@
+{
+  "model_type": "separated",
+  "model_info": {
+    "seed": 42,
+    "num_images": 3,
+    "num_prompts": 5,
+    "architecture": "separated_vit_encoder + llm_generator"
+  },
+  "tests": [
+    {
+      "image_id": 1,
+      "prompt_id": 1,
+      "prompt": "请详细描述这张图片的内容，包括颜色、形状和文字。",
+      "generated_text": "这张图片是一块红色的正方形，颜色鲜艳，没有其他细节或图案。图片的左上角有一个白色的小字“RED SQUARE”，这可能是图片的标题或描述。",
+      "output_hash": "9365c573c8cebc1315b03c3c7eb1bb37",
+      "token_count": 39,
+      "embedding_shape": "torch.Size([144, 1536])"
+    },
+    {
+      "image_id": 1,
+      "prompt_id": 2,
+      "prompt": "这张图片的主要颜色是什么？",
+      "generated_text": "这张图片的主要颜色是红色。",
+      "output_hash": "900fe86af908cbd81584ecbb6408d03c",
+      "token_count": 7,
+      "embedding_shape": "torch.Size([144, 1536])"
+    },
+    {
+      "image_id": 1,
+      "prompt_id": 3,
+      "prompt": "图片中有什么几何形状？",
+      "generated_text": "图片中有一个红色的正方形。",
+      "output_hash": "fe1c8b7ceb565184680ec1ce9e482c05",
+      "token_count": 8,
+      "embedding_shape": "torch.Size([144, 1536])"
+    },
+    {
+      "image_id": 1,
+      "prompt_id": 4,
+      "prompt": "如果这张图片是一个logo，它可能代表什么？",
+      "generated_text": "这张图片是一个红色的正方形，没有其他元素或图案。如果这是一个logo，它可能代表一个品牌、公司或组织的名称。由于图片中没有其他信息，很难确定它代表的具体品牌或组织。",
+      "output_hash": "98d6e963f43750cf9a48576b1146f8c2",
+      "token_count": 46,
+      "embedding_shape": "torch.Size([144, 1536])"
+    },
+    {
+      "image_id": 1,
+      "prompt_id": 5,
+      "prompt": "用一句话总结这张图片的特征。",
+      "generated_text": "这张图片是一块红色的正方形。",
+      "output_hash": "76cb6747008829b39e6490deba2a7d46",
+      "token_count": 9,
+      "embedding_shape": "torch.Size([144, 1536])"
+    },
+    {
+      "image_id": 2,
+      "prompt_id": 1,
+      "prompt": "请详细描述这张图片的内容，包括颜色、形状和文字。",
+      "generated_text": "这张图片展示了一个蓝色的圆形物体，背景是浅蓝色的。圆形物体的中心位置有一个白色的文本“BLUE”。",
+      "output_hash": "ffe79034a7608933e8155b45d46a2a98",
+      "token_count": 26,
+      "embedding_shape": "torch.Size([144, 1536])"
+    },
+    {
+      "image_id": 2,
+      "prompt_id": 2,
+      "prompt": "这张图片的主要颜色是什么？",
+      "generated_text": "这张图片的主要颜色是蓝色。",
+      "output_hash": "f55bc193b54c4d6593bf113853affef6",
+      "token_count": 7,
+      "embedding_shape": "torch.Size([144, 1536])"
+    },
+    {
+      "image_id": 2,
+      "prompt_id": 3,
+      "prompt": "图片中有什么几何形状？",
+      "generated_text": "图片中有一个蓝色的圆形。",
+      "output_hash": "a26ad8f9f0859debaebb7c8496dd5d20",
+      "token_count": 7,
+      "embedding_shape": "torch.Size([144, 1536])"
+    },
+    {
+      "image_id": 2,
+      "prompt_id": 4,
+      "prompt": "如果这张图片是一个logo，它可能代表什么？",
+      "generated_text": "这张图片是一个蓝色的圆形，圆形的中心有一个白色的文本“BLUE”。根据这个信息，这张图片可能代表一个品牌、公司或产品，其主要颜色是蓝色。",
+      "output_hash": "245d3149f470ec89f6ccd927f14baee6",
+      "token_count": 37,
+      "embedding_shape": "torch.Size([144, 1536])"
+    },
+    {
+      "image_id": 2,
+      "prompt_id": 5,
+      "prompt": "用一句话总结这张图片的特征。",
+      "generated_text": "图片中有一个蓝色的圆形，上面写着“BLUE”。",
+      "output_hash": "ee5f8f3aa5830251e4eb4234c538b060",
+      "token_count": 12,
+      "embedding_shape": "torch.Size([144, 1536])"
+    },
+    {
+      "image_id": 3,
+      "prompt_id": 1,
+      "prompt": "请详细描述这张图片的内容，包括颜色、形状和文字。",
+      "generated_text": "这张图片展示了一面彩虹旗。彩虹旗由七种颜色的条纹组成，从左到右分别是：红色、橙色、黄色、绿色、蓝色、紫色和黑色。每种颜色的条纹宽度不同，从左到右依次增加。彩虹旗的形状是一个正方形，正方形的四个角上各有一条黑色的条纹。",
+      "output_hash": "7b1748578a04f64daa9794f31d54739f",
+      "token_count": 78,
+      "embedding_shape": "torch.Size([144, 1536])"
+    },
+    {
+      "image_id": 3,
+      "prompt_id": 2,
+      "prompt": "这张图片的主要颜色是什么？",
+      "generated_text": "这张图片的主要颜色是彩虹色，包括红、橙、黄、绿、蓝、靛、紫。",
+      "output_hash": "2172a022ac63f13267dd4efaa63cae0c",
+      "token_count": 23,
+      "embedding_shape": "torch.Size([144, 1536])"
+    },
+    {
+      "image_id": 3,
+      "prompt_id": 3,
+      "prompt": "图片中有什么几何形状？",
+      "generated_text": "图片中没有明显的几何形状。",
+      "output_hash": "9985ed4b45232b3bf586192a1a5c7444",
+      "token_count": 7,
+      "embedding_shape": "torch.Size([144, 1536])"
+    },
+    {
+      "image_id": 3,
+      "prompt_id": 4,
+      "prompt": "如果这张图片是一个logo，它可能代表什么？",
+      "generated_text": "这张图片是一个彩虹色的标志，通常被称为LGBTQ+骄傲旗。它代表了LGBTQ+社区的多样性、包容性和争取权利的斗争。这个标志在许多文化中被用来支持和庆祝LGBTQ+社区的权益和权利。",
+      "output_hash": "de73133e5258437a2a65ef3b6f7b540c",
+      "token_count": 56,
+      "embedding_shape": "torch.Size([144, 1536])"
+    },
+    {
+      "image_id": 3,
+      "prompt_id": 5,
+      "prompt": "用一句话总结这张图片的特征。",
+      "generated_text": "这张图片的特征是彩虹色的条纹，代表LGBTQ+社区的骄傲和多样性。",
+      "output_hash": "d22e6e89edeecdc4c8d1474b7eca1756",
+      "token_count": 22,
+      "embedding_shape": "torch.Size([144, 1536])"
+    }
+  ]
+}

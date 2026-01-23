@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sudo apt install:*)",
+      "Bash(cmake:*)",
+      "Bash(nvidia-smi:*)",
+      "Bash(dpkg:*)",
+      "Bash(/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/nsys:*)",
+      "Bash(sudo ln:*)",
+      "Bash(sudo:*)",
+      "Bash(nsys:*)",
+      "Bash(ls:*)",
+      "Bash(timeout:*)",
+      "Bash(nsys-stats:*)",
+      "Bash(nvcc:*)",
+      "Bash(apt-cache search:*)",
+      "Bash(ldconfig:*)",
+      "Bash(perl:*)",
+      "Bash(git clone:*)",
+      "Bash(wget:*)",
+      "Bash(apt-key add:*)",
+      "Bash(apt install:*)",
+      "Bash(apt-cache:*)",
+      "Bash(echo:*)",
+      "Bash(xhost:*)",
+      "Bash(pgrep:*)",
+      "Bash(netstat:*)",
+      "Bash(ss:*)",
+      "Bash(sqlite3:*)",
+      "Bash(apt-get:*)",
+      "Bash(apt-get install:*)",
+      "Bash(python3:*)"
+    ]
+  }
+}

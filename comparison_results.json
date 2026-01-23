@@ -1,0 +1,160 @@
+{
+  "total_tests": 15,
+  "exact_matches": 11,
+  "exact_match_rate": 73.33333333333333,
+  "hash_matches": 11,
+  "hash_match_rate": 73.33333333333333,
+  "average_length_difference": 6.466666666666667,
+  "detailed_comparisons": [
+    {
+      "image_id": 1,
+      "prompt_id": 1,
+      "prompt": "请详细描述这张图片的内容，包括颜色、形状和文字。...",
+      "text_match": false,
+      "hash_match": false,
+      "length_diff": 22,
+      "original_text": "这张图片是一块红色的正方形，颜色非常鲜艳。正方形的边框是黑色的，与红色的背景形成了鲜明的对比。在正方形的中心位置，有一个白色的文本“RED SQUARE”，这表明了图片的主题或内容。...",
+      "separated_text": "这张图片是一块红色的正方形，颜色鲜艳，没有其他细节或图案。图片的左上角有一个白色的小字“RED SQUARE”，这可能是图片的标题或描述。..."
+    },
+    {
+      "image_id": 1,
+      "prompt_id": 2,
+      "prompt": "这张图片的主要颜色是什么？...",
+      "text_match": true,
+      "hash_match": true,
+      "length_diff": 0,
+      "original_text": "这张图片的主要颜色是红色。...",
+      "separated_text": "这张图片的主要颜色是红色。..."
+    },
+    {
+      "image_id": 1,
+      "prompt_id": 3,
+      "prompt": "图片中有什么几何形状？...",
+      "text_match": true,
+      "hash_match": true,
+      "length_diff": 0,
+      "original_text": "图片中有一个红色的正方形。...",
+      "separated_text": "图片中有一个红色的正方形。..."
+    },
+    {
+      "image_id": 1,
+      "prompt_id": 4,
+      "prompt": "如果这张图片是一个logo，它可能代表什么？...",
+      "text_match": true,
+      "hash_match": true,
+      "length_diff": 0,
+      "original_text": "这张图片是一个红色的正方形，没有其他元素或图案。如果这是一个logo，它可能代表一个品牌、公司或组织的名称。由于图片中没有其他信息，很难确定它代表的具体品牌或组织。...",
+      "separated_text": "这张图片是一个红色的正方形，没有其他元素或图案。如果这是一个logo，它可能代表一个品牌、公司或组织的名称。由于图片中没有其他信息，很难确定它代表的具体品牌或组织。..."
+    },
+    {
+      "image_id": 1,
+      "prompt_id": 5,
+      "prompt": "用一句话总结这张图片的特征。...",
+      "text_match": true,
+      "hash_match": true,
+      "length_diff": 0,
+      "original_text": "这张图片是一块红色的正方形。...",
+      "separated_text": "这张图片是一块红色的正方形。..."
+    },
+    {
+      "image_id": 2,
+      "prompt_id": 1,
+      "prompt": "请详细描述这张图片的内容，包括颜色、形状和文字。...",
+      "text_match": true,
+      "hash_match": true,
+      "length_diff": 0,
+      "original_text": "这张图片展示了一个蓝色的圆形物体，背景是浅蓝色的。圆形物体的中心位置有一个白色的文本“BLUE”。...",
+      "separated_text": "这张图片展示了一个蓝色的圆形物体，背景是浅蓝色的。圆形物体的中心位置有一个白色的文本“BLUE”。..."
+    },
+    {
+      "image_id": 2,
+      "prompt_id": 2,
+      "prompt": "这张图片的主要颜色是什么？...",
+      "text_match": true,
+      "hash_match": true,
+      "length_diff": 0,
+      "original_text": "这张图片的主要颜色是蓝色。...",
+      "separated_text": "这张图片的主要颜色是蓝色。..."
+    },
+    {
+      "image_id": 2,
+      "prompt_id": 3,
+      "prompt": "图片中有什么几何形状？...",
+      "text_match": true,
+      "hash_match": true,
+      "length_diff": 0,
+      "original_text": "图片中有一个蓝色的圆形。...",
+      "separated_text": "图片中有一个蓝色的圆形。..."
+    },
+    {
+      "image_id": 2,
+      "prompt_id": 4,
+      "prompt": "如果这张图片是一个logo，它可能代表什么？...",
+      "text_match": true,
+      "hash_match": true,
+      "length_diff": 0,
+      "original_text": "这张图片是一个蓝色的圆形，圆形的中心有一个白色的文本“BLUE”。根据这个信息，这张图片可能代表一个品牌、公司或产品，其主要颜色是蓝色。...",
+      "separated_text": "这张图片是一个蓝色的圆形，圆形的中心有一个白色的文本“BLUE”。根据这个信息，这张图片可能代表一个品牌、公司或产品，其主要颜色是蓝色。..."
+    },
+    {
+      "image_id": 2,
+      "prompt_id": 5,
+      "prompt": "用一句话总结这张图片的特征。...",
+      "text_match": true,
+      "hash_match": true,
+      "length_diff": 0,
+      "original_text": "图片中有一个蓝色的圆形，上面写着“BLUE”。...",
+      "separated_text": "图片中有一个蓝色的圆形，上面写着“BLUE”。..."
+    },
+    {
+      "image_id": 3,
+      "prompt_id": 1,
+      "prompt": "请详细描述这张图片的内容，包括颜色、形状和文字。...",
+      "text_match": false,
+      "hash_match": false,
+      "length_diff": 41,
+      "original_text": "这张图片展示了一面彩虹旗。彩虹旗是同性恋骄傲运动的象征，由七种颜色的条纹组成，从左到右分别是：红色、橙色、黄色、绿色、蓝色、紫色和黑色。每种颜色代表不同的意义，红色代表勇气和力量，橙色代表希望和爱，黄...",
+      "separated_text": "这张图片展示了一面彩虹旗。彩虹旗由七种颜色的条纹组成，从左到右分别是：红色、橙色、黄色、绿色、蓝色、紫色和黑色。每种颜色的条纹宽度不同，从左到右依次增加。彩虹旗的形状是一个正方形，正方形的四个角上各有..."
+    },
+    {
+      "image_id": 3,
+      "prompt_id": 2,
+      "prompt": "这张图片的主要颜色是什么？...",
+      "text_match": false,
+      "hash_match": false,
+      "length_diff": 16,
+      "original_text": "这张图片的主要颜色是彩虹色。...",
+      "separated_text": "这张图片的主要颜色是彩虹色，包括红、橙、黄、绿、蓝、靛、紫。..."
+    },
+    {
+      "image_id": 3,
+      "prompt_id": 3,
+      "prompt": "图片中有什么几何形状？...",
+      "text_match": true,
+      "hash_match": true,
+      "length_diff": 0,
+      "original_text": "图片中没有明显的几何形状。...",
+      "separated_text": "图片中没有明显的几何形状。..."
+    },
+    {
+      "image_id": 3,
+      "prompt_id": 4,
+      "prompt": "如果这张图片是一个logo，它可能代表什么？...",
+      "text_match": true,
+      "hash_match": true,
+      "length_diff": 0,
+      "original_text": "这张图片是一个彩虹色的标志，通常被称为LGBTQ+骄傲旗。它代表了LGBTQ+社区的多样性、包容性和争取权利的斗争。这个标志在许多文化中被用来支持和庆祝LGBTQ+社区的权益和权利。...",
+      "separated_text": "这张图片是一个彩虹色的标志，通常被称为LGBTQ+骄傲旗。它代表了LGBTQ+社区的多样性、包容性和争取权利的斗争。这个标志在许多文化中被用来支持和庆祝LGBTQ+社区的权益和权利。..."
+    },
+    {
+      "image_id": 3,
+      "prompt_id": 5,
+      "prompt": "用一句话总结这张图片的特征。...",
+      "text_match": false,
+      "hash_match": false,
+      "length_diff": 18,
+      "original_text": "这张图片的特征是彩虹色的条纹。...",
+      "separated_text": "这张图片的特征是彩虹色的条纹，代表LGBTQ+社区的骄傲和多样性。..."
+    }
+  ]
+}

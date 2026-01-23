@@ -26,6 +26,8 @@ _layout_re = r"^<\|box_start\|>(\d+)\s+(\d+)\s+(\d+)\s+(\d+)<\|box_end\|><\|ref_
 max_image_edge_ratio=50
 min_image_edge=28
 MODEL_PATH="/opt/modelscope/hub/OpenDataLab/MinerU2___5-2509-1___2B"
+# MODEL_PATH="/data/MinerU/MinerU2_2B_FP8_Dynamic"
+# MODEL_PATH="Qwen3-VL-30B-A3B-Instruct-AWQ-W8A16-mse-seq"
 DEFAULT_SAMPLING_PARAMS: dict[str, MinerUSamplingParams] = {
     "table": MinerUSamplingParams(presence_penalty=1.0, frequency_penalty=0.005),
     "equation": MinerUSamplingParams(presence_penalty=1.0, frequency_penalty=0.05),
@@ -210,6 +212,7 @@ def load_model():
     kwargs["gpu_memory_utilization"] = 0.9
     kwargs["mm_processor_cache_gb"] = 0
     kwargs["max_num_batched_tokens"]=8192
+    # kwargs["quantization"]="awq"
     # kwargs["enable_prefix_caching"]=False
     kwargs['model'] = MODEL_PATH
     # kwargs["max_num_seqs"]=512
