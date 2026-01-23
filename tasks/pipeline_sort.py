@@ -38,7 +38,7 @@ def main_func(save_dir=None):
     vllm_llm,tokenizer = load_model()
 
     b1=time.time()
-    all_images_pil_list, all_image_list, pdf_files, images_count_per_pdf = load_pdfs(10)
+    all_images_pil_list, all_image_list, pdf_files, images_count_per_pdf = load_pdfs(20)
     b2=time.time()
     layout_images = batch_prepare_for_layout(all_images_pil_list,num_workers=4)
     b3=time.time()
@@ -92,7 +92,7 @@ def main_func(save_dir=None):
             'page_idx': page_idx,
             'pdf_path': pdf_files[pdf_idx]
         })
-    all_middle_json=self_post_process(pdf_files,results_with_metadata,save_dir)
+    # all_middle_json=self_post_process(pdf_files,results_with_metadata,save_dir)
 
     print("======================================================")
     print(f"=======mydebug: page count: images_list:{len(all_images_pil_list)},time counsume is:{end-start}s =======")

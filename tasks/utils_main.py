@@ -19,6 +19,7 @@ import glob ,os
 import time
 import uuid
 import asyncio
+from multiprocessing import Process, cpu_count, Queue
 from mineru.data.data_reader_writer import FileBasedDataWriter
 from mineru_vl_utils.post_process import post_process as util_post_process
 system_prompt = "You are a helpful assistant."
@@ -207,7 +208,7 @@ def build_vllm_sampling_params(sampling_params: MinerUSamplingParams):
 def load_model():
     kwargs={}
     kwargs["logits_processors"] = [MinerULogitsProcessor]
-    kwargs["gpu_memory_utilization"] = 0.9
+    kwargs["gpu_memory_utilization"] = 0.3
     kwargs["mm_processor_cache_gb"] = 0
     kwargs["max_num_batched_tokens"]=8192
     # kwargs["enable_prefix_caching"]=False
@@ -418,22 +419,76 @@ def collect_image_for_extract(layout_images,blocks_list):
 class ImageType:
     PIL = 'pil_img'
     BASE64 = 'base64_img'
-def load_pdfs(page):
+
+
+def process_single_pdf(args, result_queue):
+    """处理单个PDF文件的函数（在独立进程中运行）"""
+    idx, pdf_file_path = args
+
+    with open(pdf_file_path, 'rb') as fi:
+        pdf_bytes = fi.read()
+
+    new_pdf_bytes = convert_pdf_bytes_to_bytes_by_pypdfium2(pdf_bytes)
+    # 禁用内部多进程，避免嵌套多进程问题
+    images_list, pdf_doc = load_images_from_pdf(new_pdf_bytes, image_type=ImageType.PIL, threads=1)
+    images_pil_list = [image_dict["img_pil"] for image_dict in images_list]
+
+    # 将结果放入队列，包含索引以便排序
+    result_queue.put((idx, images_pil_list, images_list, len(images_pil_list)))
+
+
+def load_pdfs(page, num_processes=None):
+    """
+    使用多进程并发加载PDF文件，每个PDF启动一个独立进程
+
+    Args:
+        page: 要加载的PDF数量
+        num_processes: 最大并发进程数，默认为CPU核心数（用于控制同时运行的进程数量）
+    """
+    print("mydebug: call load_pdfs")
     pdf_dir = "/data/google"
     pdf_files = glob.glob(os.path.join(pdf_dir, "*.pdf"))[:page]  # 获取前n个PDF
     all_images_pil_list = []
     all_image_list = []
     images_count_per_pdf = []  # 记录每个PDF的页面数量
 
-    for idx, pdf_file_path in enumerate(pdf_files):
-        with open(pdf_file_path, 'rb') as fi:
-            pdf_bytes = fi.read()
-        new_pdf_bytes = convert_pdf_bytes_to_bytes_by_pypdfium2(pdf_bytes)
-        images_list, pdf_doc = load_images_from_pdf(new_pdf_bytes, image_type=ImageType.PIL)
-        images_pil_list = [image_dict["img_pil"] for image_dict in images_list]
-        images_count_per_pdf.append(len(images_pil_list))  # 记录当前PDF的页面数
+    # 如果没有指定进程数，使用CPU核心数
+    if num_processes is None:
+        num_processes = cpu_count()
+
+    # 创建结果队列（足够大避免阻塞）
+    result_queue = Queue(maxsize=max(len(pdf_files), num_processes * 2))
+
+    results = []
+
+    # 分批处理，控制并发数量
+    for i in range(0, len(pdf_files), num_processes):
+        batch_files = pdf_files[i:i + num_processes]
+        processes = []
+
+        # 为当前批次创建并启动进程
+        for idx, pdf_file_path in enumerate(batch_files, start=i):
+            p = Process(target=process_single_pdf, args=((idx, pdf_file_path), result_queue))
+            p.start()
+            processes.append(p)
+
+        # 立即收集当前批次的结果（避免队列满）
+        for _ in range(len(batch_files)):
+            results.append(result_queue.get())
+
+        # 等待当前批次的所有进程完成
+        for p in processes:
+            p.join()
+
+    # 按索引排序以保持原顺序
+    results.sort(key=lambda x: x[0])
+
+    # 汇总结果
+    for idx, images_pil_list, images_list, count in results:
+        images_count_per_pdf.append(count)
         all_image_list.extend(images_list)
-        all_images_pil_list.extend(images_pil_list)  # 拼接到总列表
+        all_images_pil_list.extend(images_pil_list)
+    print("mydebug: call load_pdfs done")
     return all_images_pil_list, all_image_list, pdf_files, images_count_per_pdf
 
 

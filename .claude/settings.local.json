@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sudo docker ps:*)",
+      "Bash(sudo docker logs:*)",
+      "Bash(docker ps:*)",
+      "Bash(docker logs:*)",
+      "Bash(sudo docker images:*)",
+      "Bash(make start-api-container:*)",
+      "Bash(chmod:*)"
+    ]
+  }
+}

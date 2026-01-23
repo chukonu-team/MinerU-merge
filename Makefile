@@ -1,24 +1,9 @@
 start-api-container:
 	sudo docker run -itd \
-		--privileged \
-		--gpus=1 \
+		--gpus='"device=1"' \
 		--network=host \
 		-v /home/zz/MinerU-merge:/data/MinerU \
 		-v /ssd/dataset/google:/data/google \
-		--name mineru-api-server \
-		-e "PYTHONUNBUFFERED=1" \
-		-e "GPU_IDS=6" \
-		-e "VRAM_SIZE_GB=10" \
-		-e "WORKERS_PER_GPU=3" \
-		-e "MAX_PAGES=1000" \
-		-e "SHUFFLE=false" \
-		-e "BATCH_SIZE=384" \
-		-e "PROPORTION=0" \
-		-e "USE_BATCH=true" \
-		-e "PYTHONPATH=/data/MinerU" \
-		-e "MINERU_TOOLS_CONFIG_JSON=/data/MinerU/mineru.json" \
-		-e "TORCHDYNAMO_VERBOSE=1" \
-		-e "TORCH_LOGS=+dynamo" \
 		-e "OMP_NUM_THREADS=3" \
 		-e "MKL_NUM_THREADS=3" \
 		-e "OPENBLAS_NUM_THREADS=3" \
@@ -27,9 +12,9 @@ start-api-container:
 		-e "MINERU_MODEL_SOURCE=local" \
 		-e "GPU_MEMORY_UTILIZATION=0.3" \
 		-e "DEFAULT_BATCH_SIZE=100" \
-		mineru:v2.6.4 \
-		--workdir /data/MinerU \
-		/usr/bin/bash
+		--name mineru-api-server \
+		mineru:v2.6.4
+
 run-scheduler:
 	python3 tasks/scheduler.py > scheduler.log 2>&1
 run-pipeline:
@@ -66,3 +51,5 @@ sfeel:
 	--python-sampling=true \
 	--output=async_pipeline_report \
 	python3 tasks/scheduler.py > sfeel.log 2>&1
+parallel:
+	python3 tasks/parallel.py -n 3 > parallel.log 2>&1

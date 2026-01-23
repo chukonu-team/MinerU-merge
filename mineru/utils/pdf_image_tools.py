@@ -66,8 +66,8 @@ def load_images_from_pdf(
         TimeoutError: 当转换超时时抛出
     """
     pdf_doc = pdfium.PdfDocument(pdf_bytes)
-    if is_windows_environment():
-        # Windows 环境下不使用多进程
+    if is_windows_environment() or threads == 1:
+        # Windows 环境或单线程模式下不使用多进程
         return load_images_from_pdf_core(
             pdf_bytes,
             dpi,
