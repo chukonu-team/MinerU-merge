@@ -33,7 +33,7 @@ NODE_NAME = os.getenv("NODE_NAME", "unknown")
 PROJECT = os.getenv("PROJECT", "unknown")
 
 
-def get_pdf_page_count(pdf_path, report_kafka=False):
+def get_pdf_page_count(pdf_path, is_report_kafka=False):
     """使用fitz获取PDF页数"""
     try:
         import fitz  # PyMuPDF
@@ -43,7 +43,7 @@ def get_pdf_page_count(pdf_path, report_kafka=False):
         return page_count
     except Exception as e:
         logging.warning(f"Error getting page count for {pdf_path}: {e}")
-        if report_kafka:
+        if is_report_kafka:
             data = {"event_time": int(time.time() * 1000),
                     "cluster": CLUSTER,
                     "pod": POD_NAME,

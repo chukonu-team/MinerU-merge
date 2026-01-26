@@ -18,7 +18,7 @@ _KAFKA_CONF = {
     "compression.type": "snappy"
 }
 
-topic = "mineru-test"
+topic = "mineru-prod"
 
 _producer = None
 _lock = threading.Lock()
